@@ -23,23 +23,26 @@
 - Gradual HDD expansion as budget allows
 - Optional NVMe special device for HDD metadata acceleration
 
-### [ ] Verify Hardware Compatibility (before purchase)
-- [ ] Confirm WTR MAX has OCuLink port or M.2 slot compatible with OCuLink adapter
-- [ ] Check AOOSTAR specs/forums for OCuLink support
-- [ ] Verify eGPU power requirements vs AG01's 400W PSU
-- [ ] Consider eGPU width/length vs AG01 dock dimensions
+### [x] Verify Hardware Compatibility (before purchase)
 
-### [ ] Purchase Hardware
+- [x] Confirm WTR MAX has OCuLink port or M.2 slot compatible with OCuLink adapter
+- [x] Check AOOSTAR specs/forums for OCuLink support
+- [x] Verify eGPU power requirements vs AG01's 400W PSU
+- [x] Consider eGPU width/length vs AG01 dock dimensions
+
+### [x] Purchase Hardware
 
 **Initial Purchase:**
-- [ ] AOOSTAR WTR MAX (AMD R7 Pro 8845HS, 11 bays)
-- [ ] Boot: 4TB NVMe (Samsung 990 PRO PCIe Gen4)
-- [ ] Fast tier: 2×2TB NVMe (Samsung 990 PRO or similar)
+
+- [x] AOOSTAR WTR MAX (AMD R7 Pro 8845HS, 11 bays)
+- [x] Boot: 4TB NVMe (Samsung 990 PRO PCIe Gen4)
+- [x] Fast tier: 2×2TB NVMe (Samsung 990 PRO or similar)
   - Alternative: 2×4TB NVMe if budget allows
   - Alternative: 1×4TB NVMe (no redundancy initially, add mirror later)
-- [ ] Data: 3×24TB HDD (Seagate IronWolf Pro ST24000NT001)
+- [x] Data: 3×24TB HDD (Seagate IronWolf Pro ST24000NT001)
 
 **Gradual Expansion (buy as budget allows):**
+
 - [ ] Drive #4: 1×24TB HDD
 - [ ] Drive #5: 1×24TB HDD
 - [ ] Drive #6: 1×24TB HDD
@@ -48,10 +51,12 @@
 - [ ] Hot spare: 1×24TB HDD (optional)
 
 **NVMe Upgrade Path (optional):**
+
 - [ ] If started with 2×2TB: Upgrade to 2×4TB via `zpool replace` (see notes)
 - [ ] If started with 1×4TB: Add second 4TB via `zpool attach` for mirror
 
 **eGPU Expansion (optional):**
+
 - [ ] AOOSTAR AG01 eGPU Dock (OCuLink, 400W PSU)
 - [ ] Dedicated GPU for custom-workloads VM (NVIDIA/AMD)
 - [ ] Verify WTR MAX has OCuLink port or compatible M.2 slot
