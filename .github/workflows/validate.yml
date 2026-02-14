@@ -36,8 +36,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Install mise for tool management
-      # Cannot pin by digest: Renovate will manage action updates
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.0.0
         with:
           install: true
 
@@ -96,16 +95,13 @@ jobs:
       - uses: actions/checkout@v4
 
       # Install mise for tool management
-      # Cannot pin by digest: Renovate will manage action updates
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.0.0
         with:
           install: true
 
-      # Install Python tools
+      # Install Python linting tools into mise venv
       - name: Install Python linting tools
-        run: |
-          pip install --upgrade pip
-          pip install ansible ansible-lint yamllint
+        run: pip install ansible-lint yamllint
 
       # YAML syntax validation
       - name: YAML Lint
