@@ -42,23 +42,6 @@
         cache_valid_time: 3600
 
     # === GPU Passthrough Configuration ===
-    - name: Check if GRUB config needs update
-      ansible.builtin.lineinfile:
-        path: /etc/default/grub
-        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
-        line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ grub_cmdline }}"'
-        state: present
-      register: grub_config
-      check_mode: true
-
-    - name: Backup GRUB config
-      ansible.builtin.copy:
-        src: /etc/default/grub
-        dest: /etc/default/grub.backup
-        remote_src: true
-        mode: "0644"
-      when: grub_config.changed
-
     - name: Update GRUB configuration for GPU passthrough
       ansible.builtin.lineinfile:
         path: /etc/default/grub
