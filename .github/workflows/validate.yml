@@ -78,16 +78,6 @@ jobs:
           tofu init -backend=false
           tofu validate
 
-      - name: Generate plan
-        run: |
-          cd terraform
-          tofu plan -no-color -out=tfplan.out
-
-      - name: Show plan summary
-        run: |
-          cd terraform
-          tofu show -no-color tfplan.out
-
   ansible:
     runs-on: ubuntu-latest
     steps:
