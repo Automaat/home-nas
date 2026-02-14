@@ -12,7 +12,7 @@
 # Output Ansible command
 output "ansible_storage_setup" {
   description = "Ansible command to configure storage on Proxmox host"
-  value = <<-EOT
+  value       = <<-EOT
     cd ../ansible && ansible-playbook -i inventory.yml playbooks/configure-proxmox.yml
   EOT
 }

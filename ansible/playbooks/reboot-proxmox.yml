@@ -27,7 +27,10 @@
 
     - name: Verify GPU bound to vfio-pci
       ansible.builtin.shell:
-        cmd: lspci -nnk | grep -A 3 VGA | grep "Kernel driver in use"
+        cmd: |
+          set -o pipefail
+          lspci -nnk | grep -A 3 VGA | grep "Kernel driver in use"
+        executable: /bin/bash
       register: gpu_driver
       changed_when: false
 

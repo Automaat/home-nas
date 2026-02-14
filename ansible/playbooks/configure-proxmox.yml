@@ -15,15 +15,18 @@
       loop:
         - /etc/apt/sources.list.d/pve-enterprise.sources
         - /etc/apt/sources.list.d/ceph.sources
-      ignore_errors: true
+      failed_when: false
 
     - name: Rename enterprise repos to .disabled (if exist)
-      ansible.builtin.shell: |
-        for file in /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources; do
-          if [ -f "$file" ]; then
-            mv "$file" "${file}.disabled"
-          fi
-        done
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          for file in /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources; do
+            if [ -f "$file" ]; then
+              mv "$file" "${file}.disabled"
+            fi
+          done
+        executable: /bin/bash
       changed_when: false
       failed_when: false
 
@@ -62,7 +65,10 @@
         regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
         line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ grub_cmdline }}"'
         backup: true
-      register: grub_updated
+      notify:
+        - Update GRUB
+        - Update initramfs
+        - Set reboot required
 
     - name: Create vfio-pci configuration
       ansible.builtin.copy:
@@ -71,26 +77,9 @@
           softdep amdgpu pre: vfio-pci
         dest: /etc/modprobe.d/vfio.conf
         mode: "0644"
-      register: vfio_config
-
-    - name: Update GRUB
-      ansible.builtin.command:
-        cmd: update-grub
-      when: grub_updated.changed
-      register: grub_update_result
-      changed_when: grub_update_result.rc == 0
-
-    - name: Update initramfs
-      ansible.builtin.command:
-        cmd: update-initramfs -u
-      when: vfio_config.changed or grub_updated.changed
-      register: initramfs_result
-      changed_when: initramfs_result.rc == 0
-
-    - name: Set reboot required flag
-      ansible.builtin.set_fact:
-        reboot_required: true
-      when: grub_updated.changed or vfio_config.changed
+      notify:
+        - Update initramfs
+        - Set reboot required
 
     # === ZFS Pool Management ===
     - name: Check if ZFS pools exist
@@ -165,5 +154,22 @@
     # === Reboot Notification ===
     - name: Display reboot required message
       ansible.builtin.debug:
-        msg: "REBOOT REQUIRED - GRUB or vfio configuration changed. Run: ansible-playbook -i inventory.yml playbooks/reboot-proxmox.yml"
+        msg: >-
+          REBOOT REQUIRED - GRUB or vfio configuration changed.
+          Run: ansible-playbook -i inventory.yml playbooks/reboot-proxmox.yml
       when: reboot_required is defined and reboot_required
+
+  handlers:
+    - name: Update GRUB
+      ansible.builtin.command:
+        cmd: update-grub
+      changed_when: true
+
+    - name: Update initramfs
+      ansible.builtin.command:
+        cmd: update-initramfs -u
+      changed_when: true
+
+    - name: Set reboot required
+      ansible.builtin.set_fact:
+        reboot_required: true
