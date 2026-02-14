@@ -1,0 +1,11 @@
+[tools]
+# Infrastructure as Code
+opentofu = "1.9.0"
+tflint = "0.54.0"
+
+# Configuration Management
+ansible = "11.1.0"
+python = "3.12.8"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
