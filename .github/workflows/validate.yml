@@ -3,7 +3,7 @@ name: Validate
 on:
   pull_request:
   push:
-    branches: [main, master]
+    branches: [main]
 
 # Cancel in-progress runs for same PR/branch
 concurrency:

@@ -251,7 +251,9 @@
 ## Infrastructure as Code
 
 ### [x] Create Flake Configuration
-- [ ] Create `flake.nix`:
+
+- [x] Create `flake.nix`:
+
   ```nix
   {
     inputs = {
@@ -283,7 +285,8 @@
 - [x] Run `nix flake update`
 
 ### [x] Create NixOS Common Config
-- [ ] Create `nixos/common.nix`:
+
+- [x] Create `nixos/common.nix`:
   - Base packages
   - SSH config (keys from environment-as-code)
   - Firewall defaults
@@ -399,38 +402,102 @@
 
 ## Deployment
 
-### [ ] Deploy Infrastructure
-- [ ] Plan: `cd terraform && tofu plan -out=plan.tfplan`
-- [ ] Review plan output
-- [ ] Apply: `tofu apply plan.tfplan`
-- [ ] Verify VMs created in Proxmox
+**Architecture Decision:** Using Ubuntu VMs with Docker instead of NixOS for simpler deployment and management.
 
-### [ ] Deploy NixOS VMs
-- [ ] Deploy media-services:
-  ```bash
-  nixos-rebuild switch \
-    --flake .#media-services \
-    --target-host root@media-services \
-    --build-host localhost
-  ```
-- [ ] Verify Docker containers running: `ssh root@media-services docker ps`
-- [ ] Deploy infrastructure:
-  ```bash
-  nixos-rebuild switch \
-    --flake .#infrastructure \
-    --target-host root@infrastructure \
-    --build-host localhost
-  ```
-- [ ] Verify Caddy running: `ssh root@infrastructure systemctl status caddy`
+### [x] Deploy Infrastructure
 
-### [ ] Deploy Ubuntu VM
-- [ ] Wait for cloud-init completion on custom-workloads VM
-- [ ] Deploy containers:
+- [x] Switched from telmate/proxmox to bpg/proxmox provider (better maintained)
+- [x] Plan: `cd terraform && tofu plan -out=plan.tfplan`
+- [x] Apply: `tofu apply plan.tfplan`
+- [x] Fix: Added `machine = "q35"` for GPU passthrough support
+- [x] Verify VMs created in Proxmox
+
+**Created VMs:**
+
+- media-services (100): 6 cores, 20GB RAM, AMD 780M GPU, VLANs 20+40
+- infrastructure (101): 2 cores, 4GB RAM, VLANs 10+30
+- custom-workloads (102): 4 cores, 28GB RAM, VLAN 20
+
+### [x] Configure VLAN Routing
+
+**Ubiquiti Dream Router 7 Configuration:**
+
+- [x] Created VLAN 10 (Management): 192.168.10.0/24
+- [x] Created VLAN 20 (Services): 192.168.20.0/24
+- [x] Created VLAN 30 (Public): 192.168.30.0/24
+- [x] Created VLAN 40 (Downloads): 192.168.40.0/24
+- [x] Configured DHCP on all VLANs
+- [x] Set Proxmox port to trunk mode ("All" profile)
+
+**VM IP Assignments:**
+
+- infrastructure: 192.168.10.222 (VLAN 10)
+- media-services: 192.168.20.247 (VLAN 20)
+- custom-workloads: 192.168.20.106 (VLAN 20)
+
+**Note:** 2nd NICs on infrastructure (VLAN 30) and media-services (VLAN 40) need manual configuration - cloud-init only configures primary interface.
+
+### [x] Verify Connectivity
+
+- [x] All VMs reachable via SSH
+- [x] Ansible connectivity verified
+- [x] Updated ansible/inventory.yml with correct IPs
+
+### [ ] Deploy Docker + Services
+
+- [ ] Create Docker Compose files for media stack
+- [ ] Deploy to media-services:
+
   ```bash
-  cd ansible
-  ansible-playbook -i inventory.yml playbooks/deploy-containers.yml
+  ansible-playbook -i ansible/inventory.yml playbooks/deploy-containers.yml --limit media-services
   ```
-- [ ] Verify: `ssh ubuntu@custom-workloads docker ps`
+
+- [ ] Verify: `ssh root@media-services docker ps`
+
+**Services to deploy:**
+
+- Jellyfin (with GPU transcoding)
+- Sonarr, Radarr, Prowlarr
+- qBittorrent
+- Caddy (on infrastructure VM)
+
+## Next Steps
+
+### Immediate Priority
+
+1. **Configure 2nd NICs** (optional but recommended for proper segmentation):
+
+   - infrastructure: Enable ens19 for VLAN 30 (Public - Caddy external access)
+   - media-services: Enable enp6s19 for VLAN 40 (Downloads - qBittorrent)
+
+2. **Create Docker Compose files:**
+
+   - `ansible/docker-compose/media-stack.yml` (Jellyfin, *arr stack, qBittorrent)
+   - `ansible/docker-compose/caddy.yml` (reverse proxy)
+
+3. **Update/create Ansible playbooks:**
+
+   - `ansible/playbooks/deploy-containers.yml` (install Docker, deploy compose files)
+   - Configure GPU passthrough for Jellyfin container
+
+4. **Deploy services:**
+
+   - Run Ansible playbook to deploy containers
+   - Configure services (Jellyfin, *arr stack, etc.)
+   - Setup Caddy reverse proxy
+
+5. **NFS setup for Mac:**
+
+   - Configure NFS exports on Proxmox
+   - Mount NFS shares on Mac
+   - Test performance
+
+### Nice to Have
+
+- Configure secondary NICs via cloud-init or Ansible
+- Setup monitoring (Grafana, Prometheus)
+- Configure automated backups
+- Setup Renovate for container updates
 
 ## Mac Storage Configuration
 

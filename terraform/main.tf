@@ -2,116 +2,149 @@ terraform {
   required_version = ">= 1.9.0"
   required_providers {
     proxmox = {
-      source  = "telmate/proxmox"
-      version = "~> 2.9"
+      source  = "bpg/proxmox"
+      version = "~> 0.71"
     }
   }
 }
 
 provider "proxmox" {
-  pm_api_url      = var.proxmox_api_url
-  pm_tls_insecure = true
-  # Use environment variables for credentials:
-  # PM_API_TOKEN_ID and PM_API_TOKEN_SECRET
+  endpoint = var.proxmox_api_url
+  insecure = true
+  username = var.proxmox_username
+  password = var.proxmox_password
 }
 
 # Media Services VM
-resource "proxmox_vm_qemu" "media_services" {
-  name        = "media-services"
-  target_node = var.proxmox_node
-  clone       = "nixos-template" # Create this template first
+resource "proxmox_virtual_environment_vm" "media_services" {
+  name      = "media-services"
+  node_name = var.proxmox_node
+  on_boot   = true
+  vm_id     = 100
+  machine   = "q35"
 
-  cores   = var.media_services_cores
-  sockets = 1
-  memory  = var.media_services_memory
-
-  disk {
-    storage = "tank-vms"
-    type    = "scsi"
-    size    = "32G"
+  clone {
+    vm_id = 9001 # ubuntu-template
   }
 
-  # Services network
-  network {
-    model  = "virtio"
-    bridge = "vmbr0"
-    # tag    = 20  # VLAN 20 (Services) - enable after testing
+  cpu {
+    cores = var.media_services_cores
   }
 
-  # TODO: Add second NIC for VLAN 40 (Downloads/qBittorrent) when ready
-  # network {
-  #   model  = "virtio"
-  #   bridge = "vmbr0"
-  #   tag    = 40  # VLAN 40 (Downloads)
-  # }
+  memory {
+    dedicated = var.media_services_memory
+  }
+
+  agent {
+    enabled = true
+  }
+
+  # Services network (VLAN 20)
+  network_device {
+    bridge  = "vmbr0"
+    model   = "virtio"
+    vlan_id = 20
+  }
+
+  # Downloads network (VLAN 40 - qBittorrent)
+  network_device {
+    bridge  = "vmbr0"
+    model   = "virtio"
+    vlan_id = 40
+  }
 
   # GPU passthrough (AMD 780M iGPU)
   hostpci {
-    host   = "0000:01:00.0"
-    pcie   = 1
-    rombar = 1
+    device = "hostpci0"
+    id     = "0000:01:00.0"
+    pcie   = true
+    rombar = true
   }
 
-  onboot = true
-  agent  = 1
+  disk {
+    datastore_id = "tank-vms"
+    interface    = "scsi0"
+    size         = 32
+  }
 }
 
 # Infrastructure VM
-resource "proxmox_vm_qemu" "infrastructure" {
-  name        = "infrastructure"
-  target_node = var.proxmox_node
-  clone       = "nixos-template"
+resource "proxmox_virtual_environment_vm" "infrastructure" {
+  name      = "infrastructure"
+  node_name = var.proxmox_node
+  on_boot   = true
+  vm_id     = 101
 
-  cores   = var.infrastructure_cores
-  sockets = 1
-  memory  = var.infrastructure_memory
+  clone {
+    vm_id = 9001 # ubuntu-template
+  }
+
+  cpu {
+    cores = var.infrastructure_cores
+  }
+
+  memory {
+    dedicated = var.infrastructure_memory
+  }
+
+  agent {
+    enabled = true
+  }
+
+  # Management network (VLAN 10)
+  network_device {
+    bridge  = "vmbr0"
+    model   = "virtio"
+    vlan_id = 10
+  }
+
+  # Public network (VLAN 30 - Caddy external access)
+  network_device {
+    bridge  = "vmbr0"
+    model   = "virtio"
+    vlan_id = 30
+  }
 
   disk {
-    storage = "tank-vms"
-    type    = "scsi"
-    size    = "16G"
+    datastore_id = "tank-vms"
+    interface    = "scsi0"
+    size         = 16
   }
-
-  # Management network
-  network {
-    model  = "virtio"
-    bridge = "vmbr0"
-    # tag    = 10  # VLAN 10 (Management) - enable after testing
-  }
-
-  # TODO: Add second NIC for VLAN 30 (Public) when ready
-  # network {
-  #   model  = "virtio"
-  #   bridge = "vmbr0"
-  #   tag    = 30  # VLAN 30 (Public)
-  # }
-
-  onboot = true
-  agent  = 1
 }
 
-# Custom Workloads VM (Ubuntu)
-resource "proxmox_vm_qemu" "custom_workloads" {
-  name        = "custom-workloads"
-  target_node = var.proxmox_node
-  clone       = "ubuntu-template" # Create this template first
+# Custom Workloads VM
+resource "proxmox_virtual_environment_vm" "custom_workloads" {
+  name      = "custom-workloads"
+  node_name = var.proxmox_node
+  on_boot   = true
+  vm_id     = 102
 
-  cores   = var.custom_workloads_cores
-  sockets = 1
-  memory  = var.custom_workloads_memory
+  clone {
+    vm_id = 9001 # ubuntu-template
+  }
+
+  cpu {
+    cores = var.custom_workloads_cores
+  }
+
+  memory {
+    dedicated = var.custom_workloads_memory
+  }
+
+  agent {
+    enabled = true
+  }
+
+  # Services network (VLAN 20)
+  network_device {
+    bridge  = "vmbr0"
+    model   = "virtio"
+    vlan_id = 20
+  }
 
   disk {
-    storage = "tank-vms"
-    type    = "scsi"
-    size    = "64G"
+    datastore_id = "tank-vms"
+    interface    = "scsi0"
+    size         = 64
   }
-
-  network {
-    model  = "virtio"
-    bridge = "vmbr0"
-    # tag    = 20  # VLAN 20 (Services) - enable after testing
-  }
-
-  onboot = true
-  agent  = 1
 }
