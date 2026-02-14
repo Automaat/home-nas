@@ -66,5 +66,9 @@
       command: docker compose up -d
       args:
         chdir: "/opt/docker-compose/{{ item }}"
-      loop: "{{ lookup('fileglob', '../docker-compose/*.yml', wantlist=True) | map('basename') | map('regex_replace', '\\.yml$', '') | list }}"
-      when: lookup('fileglob', '../docker-compose/*.yml', wantlist=True) | length > 0
+      loop: >-
+        {{ lookup('fileglob', '../docker-compose/*.yml', wantlist=True)
+        | map('basename') | map('regex_replace', '\\.yml$', '') | list }}
+      when: >-
+        lookup('fileglob', '../docker-compose/*.yml', wantlist=True)
+        | length > 0

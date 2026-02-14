@@ -106,7 +106,7 @@ jobs:
       - name: Install Python linting tools
         run: |
           pip install --upgrade pip
-          pip install ansible-lint yamllint
+          pip install ansible ansible-lint yamllint
 
       # YAML syntax validation
       - name: YAML Lint
