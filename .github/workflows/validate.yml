@@ -45,7 +45,7 @@ jobs:
         run: mkdir -p $TF_PLUGIN_CACHE_DIR
 
       # Cannot pin by digest: Renovate will manage action updates
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ${{ env.TF_PLUGIN_CACHE_DIR }}
           key: ${{ runner.os }}-terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
