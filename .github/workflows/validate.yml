@@ -1,0 +1,47 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v4
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: cachix/install-nix-action@v27
+      - name: Check flake
+        run: nix flake check
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v4
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: opentofu/setup-opentofu@v1
+      - name: Validate Terraform
+        run: |
+          cd terraform
+          tofu init -backend=false
+          tofu validate
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        # Cannot pin by digest: Renovate will manage action updates
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install Ansible
+        run: pip install ansible
+      - name: Syntax check
+        run: |
+          cd ansible
+          ansible-playbook --syntax-check playbooks/*.yml

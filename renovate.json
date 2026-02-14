@@ -2,5 +2,14 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
-  ]
+  ],
+  "docker-compose": {
+    "fileMatch": ["ansible/docker-compose/.*\\.yml$"]
+  },
+  "nix": {
+    "enabled": true
+  },
+  "terraform": {
+    "enabled": true
+  }
 }
