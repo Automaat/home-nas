@@ -240,7 +240,7 @@
 
 ## Infrastructure as Code
 
-### [ ] Create Flake Configuration
+### [x] Create Flake Configuration
 - [ ] Create `flake.nix`:
   ```nix
   {
@@ -270,9 +270,9 @@
     };
   }
   ```
-- [ ] Run `nix flake update`
+- [x] Run `nix flake update`
 
-### [ ] Create NixOS Common Config
+### [x] Create NixOS Common Config
 - [ ] Create `nixos/common.nix`:
   - Base packages
   - SSH config (keys from environment-as-code)
@@ -280,7 +280,7 @@
   - User accounts
   - Timezone, locale
 
-### [ ] Create Media Services VM Config
+### [x] Create Media Services VM Config
 - [ ] Create `nixos/hosts/media-services/configuration.nix`
 - [ ] Create `nixos/hosts/media-services/hardware.nix`:
   - GPU passthrough (vfio-pci)
@@ -292,7 +292,7 @@
   - Define qBittorrent container
   - All use `/data` volumes
 
-### [ ] Create Infrastructure VM Config
+### [x] Create Infrastructure VM Config
 - [ ] Create `nixos/hosts/infrastructure/configuration.nix`
 - [ ] Create `nixos/hosts/infrastructure/caddy.nix`:
   - Caddy service config
@@ -300,7 +300,7 @@
   - WebSocket support
   - Auto-HTTPS
 
-### [ ] Create OpenTofu Configuration
+### [x] Create OpenTofu Configuration
 - [ ] Create `terraform/main.tf`:
   - Proxmox provider config
   - 3 VM resources (media-services, infrastructure, custom-workloads)
@@ -321,9 +321,9 @@
     # custom-workloads VM
     hostpci0 = "0000:01:00.0,pcie=1"  # eGPU address (verify with lspci)
     ```
-- [ ] Initialize: `cd terraform && tofu init`
+- [x] Initialize: `cd terraform && tofu init`
 
-### [ ] Create Ansible Configuration
+### [x] Create Ansible Configuration
 - [ ] Create `ansible/inventory.yml`:
   ```yaml
   all:
@@ -355,7 +355,7 @@
                 capabilities: [gpu]
   ```
 
-### [ ] Create Renovate Configuration
+### [x] Create Renovate Configuration
 - [ ] Create `renovate.json`:
   ```json
   {
@@ -366,7 +366,7 @@
   }
   ```
 
-### [ ] Create CI/CD Workflows
+### [x] Create CI/CD Workflows
 - [ ] Create `.github/workflows/validate.yml`:
   - Run `nix flake check`
   - Run `tofu validate`
