@@ -29,17 +29,46 @@
     vim
     git
     htop
+    btop
     tmux
     curl
     wget
+    rsync
+    ncdu
+    iotop
+    lsof
+    pciutils
+    usbutils
+    nfs-utils
   ];
 
   # Users
   users.users.root.openssh.authorizedKeys.keys = [
-    # Add your SSH public key here
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJx8wg+9mULtkH3ZgSIoF/GWaIIUNHslkWeo0bukAwuT skalskimarcin33@gmail.com"
   ];
 
   # Sops secrets
   sops.defaultSopsFile = ./secrets/secrets.yaml;
   sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+
+  # Automatic updates
+  system.autoUpgrade = {
+    enable = false;  # Manual control preferred
+  };
+
+  # Nix settings
+  nix = {
+    settings = {
+      experimental-features = [ "nix-command" "flakes" ];
+      auto-optimise-store = true;
+    };
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 30d";
+    };
+  };
+
+  # Security
+  security.sudo.wheelNeedsPassword = false;
 }

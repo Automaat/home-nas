@@ -13,20 +13,20 @@ all:
         media_services:
           hosts:
             media-services:
-              ansible_host: 192.168.0.10  # Update after VM deployment
+              ansible_host: 192.168.20.247
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
 
         infrastructure_vms:
           hosts:
             infrastructure:
-              ansible_host: 192.168.0.11  # Update after VM deployment
+              ansible_host: 192.168.10.222
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
 
         custom_workloads:
           hosts:
             custom-workloads:
-              ansible_host: 192.168.0.12  # Update after VM deployment
-              ansible_user: ubuntu
+              ansible_host: 192.168.20.106
+              ansible_user: root
               ansible_python_interpreter: /usr/bin/python3

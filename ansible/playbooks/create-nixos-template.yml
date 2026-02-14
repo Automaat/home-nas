@@ -1,0 +1,56 @@
+---
+- name: Create NixOS VM Template
+  hosts: proxmox_hosts
+  become: true
+  vars:
+    template_id: 9000
+    template_name: "nixos-template"
+    nixos_version: "24.11"
+    nixos_iso_url: "https://channels.nixos.org/nixos-{{ nixos_version }}/latest-nixos-minimal-x86_64-linux.iso"
+    storage: "local"
+
+  tasks:
+    - name: Check if template already exists
+      shell: qm status {{ template_id }}
+      register: template_check
+      changed_when: false
+      failed_when: false
+
+    - name: Template status
+      debug:
+        msg: "{{ 'Template already exists' if template_check.rc == 0 else 'Creating new template' }}"
+
+    - name: Download NixOS ISO
+      when: template_check.rc != 0
+      get_url:
+        url: "{{ nixos_iso_url }}"
+        dest: "/var/lib/vz/template/iso/nixos-{{ nixos_version }}-minimal.iso"
+        mode: "0644"
+      register: iso_download
+
+    - name: Create VM for template
+      when: template_check.rc != 0
+      command: >
+        qm create {{ template_id }}
+        --name {{ template_name }}
+        --memory 2048
+        --cores 2
+        --net0 virtio,bridge=vmbr0
+        --ide2 {{ storage }}:iso/nixos-{{ nixos_version }}-minimal.iso,media=cdrom
+        --boot order=scsi0
+        --scsihw virtio-scsi-pci
+        --scsi0 tank-vms:32,format=raw
+      register: vm_create
+
+    - name: Manual installation required
+      when: template_check.rc != 0
+      debug:
+        msg:
+          - "VM {{ template_id }} created. Manual NixOS installation required:"
+          - "1. Access Proxmox UI: https://192.168.0.101:8006"
+          - "2. Start VM {{ template_id }} ({{ template_name }})"
+          - "3. Open console and install NixOS"
+          - "4. After installation, run: ssh root@192.168.0.101 'qm template {{ template_id }}'"
+          - ""
+          - "OR use cloud-init image (faster, automated):"
+          - "Run: ansible-playbook -i inventory.yml playbooks/create-nixos-cloud-template.yml"
