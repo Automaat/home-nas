@@ -39,9 +39,8 @@ resource "proxmox_vm_qemu" "media_services" {
   # GPU passthrough (AMD 780M iGPU)
   hostpci {
     host   = "0000:01:00.0"
-    pcie   = true
-    rombar = true
-    x-vga  = true
+    pcie   = 1
+    rombar = 1
   }
 
   onboot = true

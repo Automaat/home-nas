@@ -99,9 +99,9 @@ jobs:
         with:
           install: true
 
-      # Install Python linting tools into mise venv
-      - name: Install Python linting tools
-        run: pip install ansible-lint yamllint
+      # Install Python dependencies
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
 
       # YAML syntax validation
       - name: YAML Lint
