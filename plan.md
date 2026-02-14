@@ -196,27 +196,27 @@
 
 ## Local Development Setup
 
-### [ ] Update Environment Tooling
-- [ ] Add to `~/sideprojects/environment-as-code/modules/packages.nix`:
+### [x] Update Environment Tooling
+- [x] Add to `~/sideprojects/environment-as-code/modules/packages.nix`:
   - opentofu
   - age
   - sops
   - ansible
-- [ ] Run `darwin-rebuild switch --flake .`
+- [x] Run `darwin-rebuild switch --flake .`
 
-### [ ] Initialize Repository
-- [ ] Create `~/sideprojects/home-nas` directory
-- [ ] Initialize git: `git init`
-- [ ] Create base structure:
+### [x] Initialize Repository
+- [x] Create `~/sideprojects/home-nas` directory
+- [x] Initialize git: `git init`
+- [x] Create base structure:
   ```bash
   mkdir -p terraform nixos/{hosts/{media-services,infrastructure},modules,secrets} \
            ansible/{playbooks,docker-compose} docs .github/workflows
   ```
 
-### [ ] Setup Secrets Management
-- [ ] Get Proxmox SSH host key: `ssh root@proxmox-ip cat /etc/ssh/ssh_host_ed25519_key.pub`
-- [ ] Generate age key: `nix-shell -p ssh-to-age --run 'echo "<pubkey>" | ssh-to-age'`
-- [ ] Create `nixos/secrets/.sops.yaml`:
+### [x] Setup Secrets Management
+- [x] Get Proxmox SSH host key: `ssh root@proxmox-ip cat /etc/ssh/ssh_host_ed25519_key.pub`
+- [x] Generate age key: `nix-shell -p ssh-to-age --run 'echo "<pubkey>" | ssh-to-age'`
+- [x] Create `nixos/secrets/.sops.yaml`:
   ```yaml
   keys:
     - &admin age1xxx...
@@ -226,13 +226,13 @@
         - age:
             - *admin
   ```
-- [ ] Create `nixos/secrets/secrets.yaml` with:
+- [x] Create `nixos/secrets/secrets.yaml`` with:
   - jellyfin_api_key
   - sonarr_api_key
   - radarr_api_key
   - prowlarr_api_key
   - qbittorrent_password
-- [ ] Encrypt: `sops nixos/secrets/secrets.yaml`
+- [x] Encrypt: `sops nixos/secrets/secrets.yaml`
 
 ## Infrastructure as Code
 
