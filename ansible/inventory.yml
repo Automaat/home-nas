@@ -1,6 +1,28 @@
 ---
 all:
-  hosts:
-    custom-workloads:
-      ansible_host: 192.168.0.104
-      ansible_user: ubuntu
+  children:
+    proxmox_hosts:
+      hosts:
+        proxmox:
+          ansible_host: 192.168.0.101
+          ansible_user: root
+
+    vms:
+      children:
+        media_services:
+          hosts:
+            media-services:
+              ansible_host: 192.168.0.10  # Update after VM deployment
+              ansible_user: root
+
+        infrastructure:
+          hosts:
+            infrastructure:
+              ansible_host: 192.168.0.11  # Update after VM deployment
+              ansible_user: root
+
+        custom_workloads:
+          hosts:
+            custom-workloads:
+              ansible_host: 192.168.0.12  # Update after VM deployment
+              ansible_user: ubuntu

@@ -1,0 +1,169 @@
+---
+- name: Configure Proxmox Host
+  hosts: proxmox_hosts
+  become: true
+  vars:
+    gpu_pci_id: "1002:1900"  # AMD 780M iGPU
+    grub_cmdline: "quiet amd_iommu=on iommu=pt video=efifb:off"
+
+  tasks:
+    # === Repository Configuration ===
+    - name: Disable Proxmox enterprise repositories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/pve-enterprise.sources
+        - /etc/apt/sources.list.d/ceph.sources
+      ignore_errors: true
+
+    - name: Rename enterprise repos to .disabled (if exist)
+      ansible.builtin.shell: |
+        for file in /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources; do
+          if [ -f "$file" ]; then
+            mv "$file" "${file}.disabled"
+          fi
+        done
+      changed_when: false
+      failed_when: false
+
+    - name: Add Proxmox no-subscription repository
+      ansible.builtin.copy:
+        content: "deb http://download.proxmox.com/debian/pve trixie pve-no-subscription\n"
+        dest: /etc/apt/sources.list.d/pve-no-subscription.list
+        mode: "0644"
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    # === GPU Passthrough Configuration ===
+    - name: Check if GRUB config needs update
+      ansible.builtin.lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+        line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ grub_cmdline }}"'
+        state: present
+      register: grub_config
+      check_mode: true
+
+    - name: Backup GRUB config
+      ansible.builtin.copy:
+        src: /etc/default/grub
+        dest: /etc/default/grub.backup
+        remote_src: true
+        mode: "0644"
+      when: grub_config.changed
+
+    - name: Update GRUB configuration for GPU passthrough
+      ansible.builtin.lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+        line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ grub_cmdline }}"'
+        backup: true
+      register: grub_updated
+
+    - name: Create vfio-pci configuration
+      ansible.builtin.copy:
+        content: |
+          options vfio-pci ids={{ gpu_pci_id }}
+          softdep amdgpu pre: vfio-pci
+        dest: /etc/modprobe.d/vfio.conf
+        mode: "0644"
+      register: vfio_config
+
+    - name: Update GRUB
+      ansible.builtin.command:
+        cmd: update-grub
+      when: grub_updated.changed
+      register: grub_update_result
+      changed_when: grub_update_result.rc == 0
+
+    - name: Update initramfs
+      ansible.builtin.command:
+        cmd: update-initramfs -u
+      when: vfio_config.changed or grub_updated.changed
+      register: initramfs_result
+      changed_when: initramfs_result.rc == 0
+
+    - name: Set reboot required flag
+      ansible.builtin.set_fact:
+        reboot_required: true
+      when: grub_updated.changed or vfio_config.changed
+
+    # === ZFS Pool Management ===
+    - name: Check if ZFS pools exist
+      ansible.builtin.command:
+        cmd: zpool list -H -o name
+      register: zpool_list
+      changed_when: false
+      failed_when: false
+
+    - name: Import tank-vms pool if not present
+      ansible.builtin.command:
+        cmd: zpool import -f tank-vms
+      when: "'tank-vms' not in zpool_list.stdout"
+      register: import_vms
+      changed_when: import_vms.rc == 0
+      failed_when: false
+
+    - name: Import tank-media pool if not present
+      ansible.builtin.command:
+        cmd: zpool import -f tank-media
+      when: "'tank-media' not in zpool_list.stdout"
+      register: import_media
+      changed_when: import_media.rc == 0
+      failed_when: false
+
+    - name: Verify ZFS pool status
+      ansible.builtin.command:
+        cmd: zpool status
+      register: zpool_status
+      changed_when: false
+
+    - name: Display ZFS pool status
+      ansible.builtin.debug:
+        var: zpool_status.stdout_lines
+
+    # === NFS Configuration ===
+    - name: Install NFS kernel server
+      ansible.builtin.apt:
+        name: nfs-kernel-server
+        state: present
+
+    - name: Enable and start NFS server
+      ansible.builtin.systemd:
+        name: nfs-server
+        enabled: true
+        state: started
+
+    - name: Configure NFS share for Mac workspace
+      ansible.builtin.command:
+        cmd: zfs set sharenfs="rw=@192.168.0.0/24,no_root_squash" tank-vms/mac-workspace
+      register: zfs_mac_result
+      changed_when: zfs_mac_result.rc == 0
+      failed_when: false
+
+    - name: Configure NFS share for media data
+      ansible.builtin.command:
+        cmd: zfs set sharenfs="rw=@192.168.0.0/24,no_root_squash" tank-media/data
+      register: zfs_media_result
+      changed_when: zfs_media_result.rc == 0
+      failed_when: false
+
+    - name: Verify NFS exports
+      ansible.builtin.command:
+        cmd: showmount -e localhost
+      register: nfs_exports
+      changed_when: false
+
+    - name: Display NFS exports
+      ansible.builtin.debug:
+        var: nfs_exports.stdout_lines
+
+    # === Reboot Notification ===
+    - name: Display reboot required message
+      ansible.builtin.debug:
+        msg: "REBOOT REQUIRED - GRUB or vfio configuration changed. Run: ansible-playbook -i inventory.yml playbooks/reboot-proxmox.yml"
+      when: reboot_required is defined and reboot_required

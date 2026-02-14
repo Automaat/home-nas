@@ -62,7 +62,10 @@
 - [ ] Verify WTR MAX has OCuLink port or compatible M.2 slot
 
 ### [x] Install Proxmox VE
-- [x] Install Proxmox on NVMe boot drive
+
+**Note:** System reinstalled 2024-02-14 after network config issues. ZFS pools imported successfully.
+
+- [x] Install Proxmox on NVMe boot drive (reinstalled)
 - [x] Verify OpenZFS version: `zfs --version` (need 2.3+ for RAIDZ expansion) - v2.3.4
 - [x] Enable IOMMU in BIOS (AMD-Vi) - already enabled
 - [ ] Verify OCuLink connection (if using eGPU): `lspci | grep -i vga`
@@ -188,13 +191,18 @@
   ```
 - NVMe performance: 3500 MB/s read, 3000 MB/s write (saturates 10GbE at 1250 MB/s)
 
-### [ ] Configure Networking
-- [ ] Create VLAN 10 (Management)
-- [ ] Create VLAN 20 (Services)
-- [ ] Create VLAN 30 (Public)
-- [ ] Create VLAN 40 (Downloads)
-- [ ] Configure vmbr0 with VLAN tagging
-- [ ] Configure Proxmox host firewall (management VLAN only)
+### [SKIPPED] Configure Networking
+
+**Decision:** Skip VLAN setup for simplicity. Use single network (vmbr0) for all VMs.
+
+- [SKIP] Create VLAN 10 (Management) - not needed for home use
+- [SKIP] Create VLAN 20 (Services) - not needed for home use
+- [SKIP] Create VLAN 30 (Public) - not needed for home use
+- [SKIP] Create VLAN 40 (Downloads) - not needed for home use
+- [SKIP] Configure vmbr0 with VLAN tagging - keeping simple
+- [SKIP] Configure Proxmox host firewall - will configure manually via UI if needed
+
+**Rationale:** VLANs add complexity and caused boot issues. Simple single-network setup is sufficient for home NAS. Can add later via Proxmox UI if needed.
 
 ## Local Development Setup
 
@@ -301,37 +309,37 @@
   - Auto-HTTPS
 
 ### [x] Create OpenTofu Configuration
-- [ ] Create `terraform/main.tf`:
+
+- [x] Create `terraform/main.tf`:
   - Proxmox provider config
   - 3 VM resources (media-services, infrastructure, custom-workloads)
-- [ ] Create `terraform/storage.tf`:
-  - NFS share config from tank-media
-- [ ] Create `terraform/network.tf`:
-  - VLAN configuration
-  - Firewall rules
-- [ ] Create `terraform/gpu-passthrough.tf`:
-  - AMD 780M (iGPU) passthrough to media-services VM
-  - eGPU passthrough to custom-workloads VM (if using eGPU)
-  - hostpci configuration for both
-  - Example config:
-    ```hcl
-    # media-services VM
-    hostpci0 = "0000:00:08.0,pcie=1"  # iGPU address (verify with lspci)
-
-    # custom-workloads VM
-    hostpci0 = "0000:01:00.0,pcie=1"  # eGPU address (verify with lspci)
-    ```
+  - Simple networking (single vmbr0 bridge, no VLANs)
+  - GPU passthrough for media-services VM (AMD 780M at 0000:01:00.0)
+- [x] Create `terraform/storage.tf`:
+  - NFS share documentation
+  - Ansible playbook reference for configuration
+- [SKIP] Create `terraform/network.tf`:
+  - Removed - using simple networking instead
+  - No VLAN configuration
+  - Firewall configured manually via Proxmox UI if needed
 - [x] Initialize: `cd terraform && tofu init`
 
 ### [x] Create Ansible Configuration
-- [ ] Create `ansible/inventory.yml`:
-  ```yaml
-  all:
-    hosts:
-      custom-workloads:
-        ansible_host: <ip>
-        ansible_user: ubuntu
-  ```
+
+**Ansible manages all Proxmox host configuration (repos, GPU passthrough, ZFS, NFS)**
+
+- [x] Create `ansible/inventory.yml`:
+  - Proxmox host + VMs
+- [x] Create `ansible/playbooks/configure-proxmox.yml`:
+  - Disable enterprise repos, add no-subscription repo
+  - Configure GRUB for GPU passthrough
+  - Create vfio-pci configuration
+  - Import ZFS pools if needed
+  - Install and configure NFS server
+  - Configure NFS shares via ZFS
+- [x] Create `ansible/playbooks/reboot-proxmox.yml`:
+  - Reboot with verification
+  - Check IOMMU and GPU driver binding
 - [ ] Create `ansible/playbooks/deploy-containers.yml`:
   - Install Docker Engine
   - Install Docker Compose plugin
