@@ -31,10 +31,19 @@ resource "proxmox_vm_qemu" "media_services" {
     size    = "32G"
   }
 
+  # Services network
   network {
     model  = "virtio"
     bridge = "vmbr0"
+    # tag    = 20  # VLAN 20 (Services) - enable after testing
   }
+
+  # TODO: Add second NIC for VLAN 40 (Downloads/qBittorrent) when ready
+  # network {
+  #   model  = "virtio"
+  #   bridge = "vmbr0"
+  #   tag    = 40  # VLAN 40 (Downloads)
+  # }
 
   # GPU passthrough (AMD 780M iGPU)
   hostpci {
@@ -63,10 +72,19 @@ resource "proxmox_vm_qemu" "infrastructure" {
     size    = "16G"
   }
 
+  # Management network
   network {
     model  = "virtio"
     bridge = "vmbr0"
+    # tag    = 10  # VLAN 10 (Management) - enable after testing
   }
+
+  # TODO: Add second NIC for VLAN 30 (Public) when ready
+  # network {
+  #   model  = "virtio"
+  #   bridge = "vmbr0"
+  #   tag    = 30  # VLAN 30 (Public)
+  # }
 
   onboot = true
   agent  = 1
@@ -91,6 +109,7 @@ resource "proxmox_vm_qemu" "custom_workloads" {
   network {
     model  = "virtio"
     bridge = "vmbr0"
+    # tag    = 20  # VLAN 20 (Services) - enable after testing
   }
 
   onboot = true

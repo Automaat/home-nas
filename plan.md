@@ -191,18 +191,20 @@
   ```
 - NVMe performance: 3500 MB/s read, 3000 MB/s write (saturates 10GbE at 1250 MB/s)
 
-### [SKIPPED] Configure Networking
+### [x] Configure Networking
 
-**Decision:** Skip VLAN setup for simplicity. Use single network (vmbr0) for all VMs.
+**Implementation:** Gradual VLAN setup using Ansible, tested and verified.
 
-- [SKIP] Create VLAN 10 (Management) - not needed for home use
-- [SKIP] Create VLAN 20 (Services) - not needed for home use
-- [SKIP] Create VLAN 30 (Public) - not needed for home use
-- [SKIP] Create VLAN 40 (Downloads) - not needed for home use
-- [SKIP] Configure vmbr0 with VLAN tagging - keeping simple
-- [SKIP] Configure Proxmox host firewall - will configure manually via UI if needed
+- [x] Create VLAN 10 (Management)
+- [x] Create VLAN 20 (Services)
+- [x] Create VLAN 30 (Public)
+- [x] Create VLAN 40 (Downloads)
+- [x] Configure vmbr0 with VLAN tagging
+- [SKIP] Configure Proxmox host firewall - will configure manually if needed
 
-**Rationale:** VLANs add complexity and caused boot issues. Simple single-network setup is sufficient for home NAS. Can add later via Proxmox UI if needed.
+**Approach:** Used `ifreload` instead of full network restart, with automatic connectivity testing and rollback support. VLANs configured via `ansible/playbooks/configure-vlans-gradual.yml` with step-by-step execution.
+
+**Verification:** Created test VM with VLAN 20 tag, confirmed bridge VLAN tagging working correctly.
 
 ## Local Development Setup
 
@@ -340,6 +342,14 @@
 - [x] Create `ansible/playbooks/reboot-proxmox.yml`:
   - Reboot with verification
   - Check IOMMU and GPU driver binding
+- [x] Create `ansible/playbooks/configure-vlans-gradual.yml`:
+  - Gradual VLAN setup with step-by-step execution
+  - Automatic connectivity testing and rollback support
+  - Tags: backup, check, vlan-bridge, verify, rollback
+- [x] Create `ansible/playbooks/create-ubuntu-cloud-template.yml`:
+  - Automated Ubuntu cloud template creation
+  - Cloud-init configuration with SSH keys
+  - Template ID 9001, ready for VM deployment
 - [ ] Create `ansible/playbooks/deploy-containers.yml`:
   - Install Docker Engine
   - Install Docker Compose plugin
