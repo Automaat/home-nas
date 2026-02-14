@@ -23,6 +23,23 @@ jobs:
       - uses: actions/checkout@v4
       # Cannot pin by digest: Renovate will manage action updates
       - uses: opentofu/setup-opentofu@v1
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'terraform/'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: terraform-linters/setup-tflint@v4
+      - name: Init TFLint
+        run: tflint --init
+      - name: Run TFLint
+        run: tflint --recursive --format compact
+      - name: Format check
+        run: |
+          cd terraform
+          tofu fmt -check -recursive
       - name: Validate Terraform
         run: |
           cd terraform
@@ -39,8 +56,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Install Ansible
-        run: pip install ansible
+      - name: Install tools
+        run: pip install ansible ansible-lint yamllint
+      - name: YAML Lint
+        run: yamllint ansible/
+      - name: Ansible Lint
+        run: |
+          cd ansible
+          ansible-lint playbooks/*.yml
       - name: Syntax check
         run: |
           cd ansible

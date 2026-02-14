@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "proxmox" {
-  pm_api_url      = "https://192.168.0.101:8006/api2/json"
+  pm_api_url      = var.proxmox_api_url
   pm_tls_insecure = true
   # Use environment variables for credentials:
   # PM_API_TOKEN_ID and PM_API_TOKEN_SECRET
@@ -17,12 +17,12 @@ provider "proxmox" {
 # Media Services VM
 resource "proxmox_vm_qemu" "media_services" {
   name        = "media-services"
-  target_node = "pve"
-  clone       = "nixos-template"  # Create this template first
+  target_node = var.proxmox_node
+  clone       = "nixos-template" # Create this template first
 
-  cores   = 4
+  cores   = var.media_services_cores
   sockets = 1
-  memory  = 8192
+  memory  = var.media_services_memory
 
   disk {
     storage = "local-lvm"
@@ -50,12 +50,12 @@ resource "proxmox_vm_qemu" "media_services" {
 # Infrastructure VM
 resource "proxmox_vm_qemu" "infrastructure" {
   name        = "infrastructure"
-  target_node = "pve"
+  target_node = var.proxmox_node
   clone       = "nixos-template"
 
-  cores   = 2
+  cores   = var.infrastructure_cores
   sockets = 1
-  memory  = 2048
+  memory  = var.infrastructure_memory
 
   disk {
     storage = "local-lvm"
@@ -75,12 +75,12 @@ resource "proxmox_vm_qemu" "infrastructure" {
 # Custom Workloads VM (Ubuntu)
 resource "proxmox_vm_qemu" "custom_workloads" {
   name        = "custom-workloads"
-  target_node = "pve"
-  clone       = "ubuntu-template"  # Create this template first
+  target_node = var.proxmox_node
+  clone       = "ubuntu-template" # Create this template first
 
-  cores   = 4
+  cores   = var.custom_workloads_cores
   sockets = 1
-  memory  = 8192
+  memory  = var.custom_workloads_memory
 
   disk {
     storage = "local-lvm"
