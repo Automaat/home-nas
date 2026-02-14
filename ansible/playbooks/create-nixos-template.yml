@@ -11,18 +11,18 @@
 
   tasks:
     - name: Check if template already exists
-      shell: qm status {{ template_id }}
+      ansible.builtin.command: qm status {{ template_id }}
       register: template_check
       changed_when: false
       failed_when: false
 
     - name: Template status
-      debug:
+      ansible.builtin.debug:
         msg: "{{ 'Template already exists' if template_check.rc == 0 else 'Creating new template' }}"
 
     - name: Download NixOS ISO
       when: template_check.rc != 0
-      get_url:
+      ansible.builtin.get_url:
         url: "{{ nixos_iso_url }}"
         dest: "/var/lib/vz/template/iso/nixos-{{ nixos_version }}-minimal.iso"
         mode: "0644"
@@ -30,7 +30,7 @@
 
     - name: Create VM for template
       when: template_check.rc != 0
-      command: >
+      ansible.builtin.command: >
         qm create {{ template_id }}
         --name {{ template_name }}
         --memory 2048
@@ -41,10 +41,11 @@
         --scsihw virtio-scsi-pci
         --scsi0 tank-vms:32,format=raw
       register: vm_create
+      changed_when: true
 
     - name: Manual installation required
       when: template_check.rc != 0
-      debug:
+      ansible.builtin.debug:
         msg:
           - "VM {{ template_id }} created. Manual NixOS installation required:"
           - "1. Access Proxmox UI: https://192.168.0.101:8006"

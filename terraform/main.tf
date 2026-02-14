@@ -17,14 +17,14 @@ provider "proxmox" {
 
 # Media Services VM
 resource "proxmox_virtual_environment_vm" "media_services" {
-  name        = "media-services"
-  node_name   = var.proxmox_node
-  on_boot     = true
-  vm_id       = 100
-  machine     = "q35"
+  name      = "media-services"
+  node_name = var.proxmox_node
+  on_boot   = true
+  vm_id     = 100
+  machine   = "q35"
 
   clone {
-    vm_id = 9001  # ubuntu-template
+    vm_id = 9001 # ubuntu-template
   }
 
   cpu {
@@ -41,24 +41,24 @@ resource "proxmox_virtual_environment_vm" "media_services" {
 
   # Services network (VLAN 20)
   network_device {
-    bridge = "vmbr0"
-    model  = "virtio"
+    bridge  = "vmbr0"
+    model   = "virtio"
     vlan_id = 20
   }
 
   # Downloads network (VLAN 40 - qBittorrent)
   network_device {
-    bridge = "vmbr0"
-    model  = "virtio"
+    bridge  = "vmbr0"
+    model   = "virtio"
     vlan_id = 40
   }
 
   # GPU passthrough (AMD 780M iGPU)
   hostpci {
-    device  = "hostpci0"
-    id      = "0000:01:00.0"
-    pcie    = true
-    rombar  = true
+    device = "hostpci0"
+    id     = "0000:01:00.0"
+    pcie   = true
+    rombar = true
   }
 
   disk {
@@ -70,13 +70,13 @@ resource "proxmox_virtual_environment_vm" "media_services" {
 
 # Infrastructure VM
 resource "proxmox_virtual_environment_vm" "infrastructure" {
-  name        = "infrastructure"
-  node_name   = var.proxmox_node
-  on_boot     = true
-  vm_id       = 101
+  name      = "infrastructure"
+  node_name = var.proxmox_node
+  on_boot   = true
+  vm_id     = 101
 
   clone {
-    vm_id = 9001  # ubuntu-template
+    vm_id = 9001 # ubuntu-template
   }
 
   cpu {
@@ -93,15 +93,15 @@ resource "proxmox_virtual_environment_vm" "infrastructure" {
 
   # Management network (VLAN 10)
   network_device {
-    bridge = "vmbr0"
-    model  = "virtio"
+    bridge  = "vmbr0"
+    model   = "virtio"
     vlan_id = 10
   }
 
   # Public network (VLAN 30 - Caddy external access)
   network_device {
-    bridge = "vmbr0"
-    model  = "virtio"
+    bridge  = "vmbr0"
+    model   = "virtio"
     vlan_id = 30
   }
 
@@ -114,13 +114,13 @@ resource "proxmox_virtual_environment_vm" "infrastructure" {
 
 # Custom Workloads VM
 resource "proxmox_virtual_environment_vm" "custom_workloads" {
-  name        = "custom-workloads"
-  node_name   = var.proxmox_node
-  on_boot     = true
-  vm_id       = 102
+  name      = "custom-workloads"
+  node_name = var.proxmox_node
+  on_boot   = true
+  vm_id     = 102
 
   clone {
-    vm_id = 9001  # ubuntu-template
+    vm_id = 9001 # ubuntu-template
   }
 
   cpu {
@@ -137,8 +137,8 @@ resource "proxmox_virtual_environment_vm" "custom_workloads" {
 
   # Services network (VLAN 20)
   network_device {
-    bridge = "vmbr0"
-    model  = "virtio"
+    bridge  = "vmbr0"
+    model   = "virtio"
     vlan_id = 20
   }
 
