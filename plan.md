@@ -23,23 +23,26 @@
 - Gradual HDD expansion as budget allows
 - Optional NVMe special device for HDD metadata acceleration
 
-### [ ] Verify Hardware Compatibility (before purchase)
-- [ ] Confirm WTR MAX has OCuLink port or M.2 slot compatible with OCuLink adapter
-- [ ] Check AOOSTAR specs/forums for OCuLink support
-- [ ] Verify eGPU power requirements vs AG01's 400W PSU
-- [ ] Consider eGPU width/length vs AG01 dock dimensions
+### [x] Verify Hardware Compatibility (before purchase)
 
-### [ ] Purchase Hardware
+- [x] Confirm WTR MAX has OCuLink port or M.2 slot compatible with OCuLink adapter
+- [x] Check AOOSTAR specs/forums for OCuLink support
+- [x] Verify eGPU power requirements vs AG01's 400W PSU
+- [x] Consider eGPU width/length vs AG01 dock dimensions
+
+### [x] Purchase Hardware
 
 **Initial Purchase:**
-- [ ] AOOSTAR WTR MAX (AMD R7 Pro 8845HS, 11 bays)
-- [ ] Boot: 4TB NVMe (Samsung 990 PRO PCIe Gen4)
-- [ ] Fast tier: 2×2TB NVMe (Samsung 990 PRO or similar)
+
+- [x] AOOSTAR WTR MAX (AMD R7 Pro 8845HS, 11 bays)
+- [x] Boot: 4TB NVMe (Samsung 990 PRO PCIe Gen4)
+- [x] Fast tier: 2×2TB NVMe (Samsung 990 PRO or similar)
   - Alternative: 2×4TB NVMe if budget allows
   - Alternative: 1×4TB NVMe (no redundancy initially, add mirror later)
-- [ ] Data: 3×24TB HDD (Seagate IronWolf Pro ST24000NT001)
+- [x] Data: 3×24TB HDD (Seagate IronWolf Pro ST24000NT001)
 
 **Gradual Expansion (buy as budget allows):**
+
 - [ ] Drive #4: 1×24TB HDD
 - [ ] Drive #5: 1×24TB HDD
 - [ ] Drive #6: 1×24TB HDD
@@ -48,21 +51,23 @@
 - [ ] Hot spare: 1×24TB HDD (optional)
 
 **NVMe Upgrade Path (optional):**
+
 - [ ] If started with 2×2TB: Upgrade to 2×4TB via `zpool replace` (see notes)
 - [ ] If started with 1×4TB: Add second 4TB via `zpool attach` for mirror
 
 **eGPU Expansion (optional):**
+
 - [ ] AOOSTAR AG01 eGPU Dock (OCuLink, 400W PSU)
 - [ ] Dedicated GPU for custom-workloads VM (NVIDIA/AMD)
 - [ ] Verify WTR MAX has OCuLink port or compatible M.2 slot
 
-### [ ] Install Proxmox VE
-- [ ] Install Proxmox on NVMe boot drive
-- [ ] Verify OpenZFS version: `zfs --version` (need 2.3+ for RAIDZ expansion)
-- [ ] Enable IOMMU in BIOS (AMD-Vi)
+### [x] Install Proxmox VE
+- [x] Install Proxmox on NVMe boot drive
+- [x] Verify OpenZFS version: `zfs --version` (need 2.3+ for RAIDZ expansion) - v2.3.4
+- [x] Enable IOMMU in BIOS (AMD-Vi) - already enabled
 - [ ] Verify OCuLink connection (if using eGPU): `lspci | grep -i vga`
-- [ ] Check IOMMU groups: `find /sys/kernel/iommu_groups/ -type l | grep -E '(VGA|Display)'`
-- [ ] Edit `/etc/default/grub`:
+- [x] Check IOMMU groups: `find /sys/kernel/iommu_groups/ -type l | grep -E '(VGA|Display)'`
+- [x] Edit `/etc/default/grub`:
   ```
   # Single GPU (iGPU only):
   GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt video=efifb:off"
@@ -70,30 +75,32 @@
   # Dual GPU (iGPU + eGPU, if different IOMMU groups need separation):
   GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt pcie_acs_override=downstream,multifunction video=efifb:off"
   ```
-- [ ] Get GPU PCI IDs: `lspci -nn | grep -E 'VGA|Display'`
-  - AMD 780M iGPU: `1002:15bf` (example)
+- [x] Get GPU PCI IDs: `lspci -nn | grep -E 'VGA|Display'`
+  - AMD 780M iGPU: `1002:1900` (actual)
   - eGPU: note actual PCI ID
-- [ ] Create `/etc/modprobe.d/vfio.conf`:
+- [x] Create `/etc/modprobe.d/vfio.conf`:
+
   ```
   # Single GPU (iGPU only):
-  options vfio-pci ids=1002:15bf
+  options vfio-pci ids=1002:1900
   softdep amdgpu pre: vfio-pci
 
   # Dual GPU (iGPU + eGPU):
-  options vfio-pci ids=1002:15bf,10de:XXXX  # Replace 10de:XXXX with actual eGPU ID
+  options vfio-pci ids=1002:1900,10de:XXXX  # Replace 10de:XXXX with actual eGPU ID
   softdep amdgpu pre: vfio-pci
   softdep nvidia pre: vfio-pci  # Add if NVIDIA eGPU
   ```
-- [ ] Run `update-grub && update-initramfs -u && reboot`
-- [ ] Verify IOMMU: `dmesg | grep -i iommu`
-- [ ] Verify vfio binding: `lspci -nnk | grep -A 3 -E 'VGA|Display'` (should show `vfio-pci` driver)
 
-### [ ] Create ZFS Pools
+- [x] Run `update-grub && update-initramfs -u && reboot`
+- [x] Verify IOMMU: `dmesg | grep -i iommu`
+- [x] Verify vfio binding: `lspci -nnk | grep -A 3 -E 'VGA|Display'` (should show `vfio-pci` driver)
+
+### [x] Create ZFS Pools
 
 **Initial Setup (3 HDDs + 2 NVMe):**
-- [ ] Install 3×24TB HDDs in bays + 2 NVMe in M.2 slots
-- [ ] Verify NVMe devices: `ls -la /dev/disk/by-id/nvme-*`
-- [ ] Create VM pool (2×2TB or 2×4TB NVMe):
+- [x] Install 3×20TB HDDs in bays + 2 NVMe in M.2 slots
+- [x] Verify NVMe devices: `ls -la /dev/disk/by-id/nvme-*`
+- [x] Create VM pool (single 2TB NVMe (no redundancy)):
   ```bash
   zpool create -f tank-vms mirror \
     /dev/disk/by-id/nvme-Samsung_990_PRO_... \
@@ -103,7 +110,7 @@
   ```bash
   zpool create -f tank-vms /dev/disk/by-id/nvme-Samsung_990_PRO_...
   ```
-- [ ] Create media pool (RAIDZ1, ~48TB usable):
+- [x] Create media pool (RAIDZ1, ~36TB usable):
   ```bash
   zpool create -f tank-media raidz1 \
     /dev/disk/by-id/ata-ST24000NT001-... \
@@ -112,7 +119,7 @@
   zfs set compression=lz4 tank-media
   zfs set atime=off tank-media
   ```
-- [ ] Create datasets:
+- [x] Create datasets:
   ```bash
   zfs create tank-media/data
   zfs create tank-media/data/media
@@ -131,11 +138,11 @@
   zfs set special_small_blocks=1M tank-media
   ```
   Note: Special device stores metadata + files <1MB on NVMe = faster browsing
-- [ ] Create Mac storage dataset (for NFS mount over 10GbE):
+- [x] Create Mac storage dataset (for NFS mount over 10GbE):
   ```bash
   zfs create tank-vms/mac-workspace
   zfs set compression=lz4 tank-vms/mac-workspace
-  zfs set sharenfs="rw=@10.0.0.0/24,no_root_squash" tank-vms/mac-workspace
+  zfs set sharenfs="rw=@192.168.0.0/24,no_root_squash" tank-vms/mac-workspace
   ```
 
 **Expand Pool (as drives purchased):**
@@ -191,27 +198,27 @@
 
 ## Local Development Setup
 
-### [ ] Update Environment Tooling
-- [ ] Add to `~/sideprojects/environment-as-code/modules/packages.nix`:
+### [x] Update Environment Tooling
+- [x] Add to `~/sideprojects/environment-as-code/modules/packages.nix`:
   - opentofu
   - age
   - sops
   - ansible
-- [ ] Run `darwin-rebuild switch --flake .`
+- [x] Run `darwin-rebuild switch --flake .`
 
-### [ ] Initialize Repository
-- [ ] Create `~/sideprojects/home-nas` directory
-- [ ] Initialize git: `git init`
-- [ ] Create base structure:
+### [x] Initialize Repository
+- [x] Create `~/sideprojects/home-nas` directory
+- [x] Initialize git: `git init`
+- [x] Create base structure:
   ```bash
   mkdir -p terraform nixos/{hosts/{media-services,infrastructure},modules,secrets} \
            ansible/{playbooks,docker-compose} docs .github/workflows
   ```
 
-### [ ] Setup Secrets Management
-- [ ] Get Proxmox SSH host key: `ssh root@proxmox-ip cat /etc/ssh/ssh_host_ed25519_key.pub`
-- [ ] Generate age key: `nix-shell -p ssh-to-age --run 'echo "<pubkey>" | ssh-to-age'`
-- [ ] Create `nixos/secrets/.sops.yaml`:
+### [x] Setup Secrets Management
+- [x] Get Proxmox SSH host key: `ssh root@proxmox-ip cat /etc/ssh/ssh_host_ed25519_key.pub`
+- [x] Generate age key: `nix-shell -p ssh-to-age --run 'echo "<pubkey>" | ssh-to-age'`
+- [x] Create `nixos/secrets/.sops.yaml`:
   ```yaml
   keys:
     - &admin age1xxx...
@@ -221,13 +228,15 @@
         - age:
             - *admin
   ```
-- [ ] Create `nixos/secrets/secrets.yaml` with:
+
+- [x] Create `nixos/secrets/secrets.yaml` with:
+
   - jellyfin_api_key
   - sonarr_api_key
   - radarr_api_key
   - prowlarr_api_key
   - qbittorrent_password
-- [ ] Encrypt: `sops nixos/secrets/secrets.yaml`
+- [x] Encrypt: `sops nixos/secrets/secrets.yaml`
 
 ## Infrastructure as Code
 

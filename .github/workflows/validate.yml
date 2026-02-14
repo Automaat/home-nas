@@ -1,0 +1,114 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Restrict permissions for security
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v4
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: cachix/install-nix-action@v27
+      - name: Check flake
+        run: nix flake check
+
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v4
+
+      # Install mise for tool management
+      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.0.0
+        with:
+          install: true
+
+      # Cache Terraform providers for faster init
+      - name: Create plugin cache dir
+        run: mkdir -p $TF_PLUGIN_CACHE_DIR
+
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      # Security scanning with Trivy
+      - uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # 0.34.0
+        with:
+          scan-type: 'config'
+          scan-ref: 'terraform/'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      # Linting with TFLint
+      - name: Init TFLint
+        run: tflint --init
+      - name: Run TFLint
+        run: tflint --recursive --format compact
+
+      # Format and validation
+      - name: Format check
+        run: |
+          cd terraform
+          tofu fmt -check -recursive
+
+      - name: Init and validate
+        run: |
+          cd terraform
+          tofu init -backend=false
+          tofu validate
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v4
+
+      # Install mise for tool management
+      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.0.0
+        with:
+          install: true
+
+      # Install Python dependencies
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # YAML syntax validation
+      - name: YAML Lint
+        run: yamllint ansible/
+
+      # Ansible best practices linting
+      - name: Ansible Lint
+        run: ansible-lint ansible/playbooks/
+
+      # Syntax validation
+      - name: Syntax check
+        run: |
+          cd ansible
+          for playbook in playbooks/*.yml; do
+            ansible-playbook --syntax-check "$playbook"
+          done
+
+      # Inventory validation
+      - name: Validate inventory
+        run: ansible-inventory -i ansible/inventory.yml --list > /dev/null

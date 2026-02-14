@@ -1,0 +1,10 @@
+---
+profile: production
+
+exclude_paths:
+  - .github/
+  - .git/
+
+skip_list:
+  - yaml[line-length]  # Handled by yamllint
+  - role-name  # Custom role naming allowed
