@@ -79,16 +79,18 @@
   - AMD 780M iGPU: `1002:1900` (actual)
   - eGPU: note actual PCI ID
 - [x] Create `/etc/modprobe.d/vfio.conf`:
+
   ```
   # Single GPU (iGPU only):
-  options vfio-pci ids=1002:15bf
+  options vfio-pci ids=1002:1900
   softdep amdgpu pre: vfio-pci
 
   # Dual GPU (iGPU + eGPU):
-  options vfio-pci ids=1002:15bf,10de:XXXX  # Replace 10de:XXXX with actual eGPU ID
+  options vfio-pci ids=1002:1900,10de:XXXX  # Replace 10de:XXXX with actual eGPU ID
   softdep amdgpu pre: vfio-pci
   softdep nvidia pre: vfio-pci  # Add if NVIDIA eGPU
   ```
+
 - [x] Run `update-grub && update-initramfs -u && reboot`
 - [x] Verify IOMMU: `dmesg | grep -i iommu`
 - [x] Verify vfio binding: `lspci -nnk | grep -A 3 -E 'VGA|Display'` (should show `vfio-pci` driver)
@@ -226,7 +228,9 @@
         - age:
             - *admin
   ```
-- [x] Create `nixos/secrets/secrets.yaml`` with:
+
+- [x] Create `nixos/secrets/secrets.yaml` with:
+
   - jellyfin_api_key
   - sonarr_api_key
   - radarr_api_key

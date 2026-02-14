@@ -54,8 +54,7 @@ jobs:
             ${{ runner.os }}-terraform-
 
       # Security scanning with Trivy
-      # Cannot pin by digest: Renovate will manage action updates
-      - uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # 0.34.0
         with:
           scan-type: 'config'
           scan-ref: 'terraform/'

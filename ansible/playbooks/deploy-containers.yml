@@ -63,12 +63,12 @@
         mode: '0644'
 
     - name: Start all compose stacks
-      command: docker compose up -d
+      command: docker compose -f {{ item }} up -d
       args:
-        chdir: "/opt/docker-compose/{{ item }}"
+        chdir: /opt/docker-compose
       loop: >-
         {{ lookup('fileglob', '../docker-compose/*.yml', wantlist=True)
-        | map('basename') | map('regex_replace', '\\.yml$', '') | list }}
+        | map('basename') | list }}
       when: >-
         lookup('fileglob', '../docker-compose/*.yml', wantlist=True)
         | length > 0

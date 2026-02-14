@@ -26,7 +26,7 @@
     backend = "docker";
     containers = {
       jellyfin = {
-        image = "jellyfin/jellyfin:latest";
+        image = "jellyfin/jellyfin:10.11.6";
         ports = [ "8096:8096" ];
         volumes = [
           "/data/media:/media:ro"
@@ -42,7 +42,7 @@
       };
 
       sonarr = {
-        image = "linuxserver/sonarr:latest";
+        image = "lscr.io/linuxserver/sonarr:4.0.16.2944-ls303";
         ports = [ "8989:8989" ];
         volumes = [
           "sonarr-config:/config"
@@ -56,7 +56,7 @@
       };
 
       radarr = {
-        image = "linuxserver/radarr:latest";
+        image = "lscr.io/linuxserver/radarr:6.0.4.10291-ls292";
         ports = [ "7878:7878" ];
         volumes = [
           "radarr-config:/config"
@@ -70,7 +70,7 @@
       };
 
       prowlarr = {
-        image = "linuxserver/prowlarr:latest";
+        image = "lscr.io/linuxserver/prowlarr:2.3.0.5236-ls137";
         ports = [ "9696:9696" ];
         volumes = [
           "prowlarr-config:/config"
@@ -83,7 +83,7 @@
       };
 
       qbittorrent = {
-        image = "linuxserver/qbittorrent:latest";
+        image = "lscr.io/linuxserver/qbittorrent:5.1.4-r2-ls440";
         ports = [
           "8080:8080"
           "6881:6881"

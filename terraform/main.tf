@@ -26,7 +26,7 @@ resource "proxmox_vm_qemu" "media_services" {
   memory  = var.media_services_memory
 
   disk {
-    storage = "local-lvm"
+    storage = "tank-vms"
     type    = "scsi"
     size    = "32G"
   }
@@ -59,7 +59,7 @@ resource "proxmox_vm_qemu" "infrastructure" {
   memory  = var.infrastructure_memory
 
   disk {
-    storage = "local-lvm"
+    storage = "tank-vms"
     type    = "scsi"
     size    = "16G"
   }
@@ -84,7 +84,7 @@ resource "proxmox_vm_qemu" "custom_workloads" {
   memory  = var.custom_workloads_memory
 
   disk {
-    storage = "local-lvm"
+    storage = "tank-vms"
     type    = "scsi"
     size    = "64G"
   }
