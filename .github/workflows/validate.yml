@@ -21,9 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Cannot pin by digest: Renovate will manage action updates
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Cannot pin by digest: Renovate will manage action updates
-      - uses: cachix/install-nix-action@v27
+      - uses: cachix/install-nix-action@v31
       - name: Check flake
         run: nix flake check
 
@@ -33,10 +33,10 @@ jobs:
       TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
     steps:
       # Cannot pin by digest: Renovate will manage action updates
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Install mise for tool management
-      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.0.0
+      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.6.1
         with:
           install: true
 
@@ -45,7 +45,7 @@ jobs:
         run: mkdir -p $TF_PLUGIN_CACHE_DIR
 
       # Cannot pin by digest: Renovate will manage action updates
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ${{ env.TF_PLUGIN_CACHE_DIR }}
           key: ${{ runner.os }}-terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
@@ -82,10 +82,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Cannot pin by digest: Renovate will manage action updates
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Install mise for tool management
-      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.0.0
+      - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # 3.6.1
         with:
           install: true
 
