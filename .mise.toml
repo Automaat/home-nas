@@ -5,6 +5,7 @@ tflint = "0.61.0"
 
 # Configuration Management
 python = "3.14.3"
+ansible-core = "2.20.2"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
