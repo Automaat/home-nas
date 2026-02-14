@@ -1,0 +1,104 @@
+---
+- name: Create Ubuntu Cloud Template
+  hosts: proxmox_hosts
+  become: true
+  vars:
+    template_id: 9001
+    template_name: "ubuntu-template"
+    ubuntu_version: "24.04"
+    cloud_image_url: "https://cloud-images.ubuntu.com/releases/{{ ubuntu_version }}/release/ubuntu-{{ ubuntu_version }}-server-cloudimg-amd64.img"
+    storage: "tank-vms"
+    ssh_public_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
+
+  tasks:
+    - name: Check if template already exists
+      shell: qm status {{ template_id }}
+      register: template_check
+      changed_when: false
+      failed_when: false
+
+    - name: Template already exists
+      when: template_check.rc == 0
+      debug:
+        msg: "Template {{ template_id }} already exists, skipping creation"
+
+    - name: Download Ubuntu cloud image
+      when: template_check.rc != 0
+      get_url:
+        url: "{{ cloud_image_url }}"
+        dest: "/tmp/ubuntu-{{ ubuntu_version }}-cloudimg.img"
+        mode: "0644"
+
+    - name: Create VM
+      when: template_check.rc != 0
+      command: >
+        qm create {{ template_id }}
+        --name {{ template_name }}
+        --memory 2048
+        --cores 2
+        --net0 virtio,bridge=vmbr0
+        --scsihw virtio-scsi-pci
+        --serial0 socket
+        --vga serial0
+        --agent enabled=1
+
+    - name: Import disk
+      when: template_check.rc != 0
+      command: >
+        qm importdisk {{ template_id }}
+        /tmp/ubuntu-{{ ubuntu_version }}-cloudimg.img
+        {{ storage }}
+      register: import_result
+
+    - name: Attach disk to VM
+      when: template_check.rc != 0
+      command: >
+        qm set {{ template_id }}
+        --scsi0 {{ storage }}:vm-{{ template_id }}-disk-0
+        --boot order=scsi0
+
+    - name: Add cloud-init drive
+      when: template_check.rc != 0
+      command: >
+        qm set {{ template_id }}
+        --ide2 {{ storage }}:cloudinit
+
+    - name: Write SSH public key to temp file
+      when: template_check.rc != 0
+      copy:
+        content: "{{ ssh_public_key }}"
+        dest: "/tmp/cloud-init-ssh-key.pub"
+        mode: "0644"
+
+    - name: Configure cloud-init
+      when: template_check.rc != 0
+      command: >
+        qm set {{ template_id }}
+        --ciuser root
+        --sshkeys /tmp/cloud-init-ssh-key.pub
+        --ipconfig0 ip=dhcp
+
+    - name: Remove temp SSH key file
+      when: template_check.rc != 0
+      file:
+        path: "/tmp/cloud-init-ssh-key.pub"
+        state: absent
+
+    - name: Convert to template
+      when: template_check.rc != 0
+      command: qm template {{ template_id }}
+
+    - name: Cleanup downloaded image
+      when: template_check.rc != 0
+      file:
+        path: "/tmp/ubuntu-{{ ubuntu_version }}-cloudimg.img"
+        state: absent
+
+    - name: Template created successfully
+      when: template_check.rc != 0
+      debug:
+        msg:
+          - "Ubuntu cloud template created successfully!"
+          - "Template ID: {{ template_id }}"
+          - "Template name: {{ template_name }}"
+          - "Ready to clone VMs from this template"

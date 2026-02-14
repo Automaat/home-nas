@@ -1,0 +1,179 @@
+---
+# Gradual VLAN Setup - Run step-by-step with tags
+# Usage:
+#   1. ansible-playbook -i inventory.yml playbooks/configure-vlans-gradual.yml --tags backup
+#   2. ansible-playbook -i inventory.yml playbooks/configure-vlans-gradual.yml --tags vlan-bridge
+#   3. Test: ssh root@proxmox-ip (should still work)
+#   4. ansible-playbook -i inventory.yml playbooks/configure-vlans-gradual.yml --tags verify
+#
+# Rollback: ansible-playbook -i inventory.yml playbooks/configure-vlans-gradual.yml --tags rollback
+
+- name: Configure VLANs Gradually
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  vars:
+    proxmox_ip: "192.168.0.101"
+    backup_file: "/etc/network/interfaces.backup-vlan"
+
+  tasks:
+    # === STEP 1: Backup ===
+    - name: Backup current network config
+      tags: [backup, always]
+      block:
+        - name: Create backup of /etc/network/interfaces
+          copy:
+            src: /etc/network/interfaces
+            dest: "{{ backup_file }}"
+            remote_src: true
+            mode: "0644"
+
+        - name: Show backup location
+          debug:
+            msg: "Backup saved to {{ backup_file }}"
+
+    # === STEP 2: Check current config ===
+    - name: Check current network config
+      tags: [check]
+      block:
+        - name: Show current interfaces file
+          command: cat /etc/network/interfaces
+          register: current_config
+          changed_when: false
+
+        - name: Display current config
+          debug:
+            var: current_config.stdout_lines
+
+        - name: Check if VLAN-aware already configured
+          shell: grep -q "bridge-vlan-aware" /etc/network/interfaces
+          register: vlan_check
+          changed_when: false
+          failed_when: false
+
+        - name: VLAN status
+          debug:
+            msg: "{{ 'VLANs already configured' if vlan_check.rc == 0 else 'VLANs not configured' }}"
+
+    # === STEP 3: Add VLAN awareness to bridge ===
+    - name: Configure VLAN-aware bridge
+      tags: [vlan-bridge]
+      block:
+        - name: Check if already VLAN-aware
+          shell: grep -q "bridge-vlan-aware yes" /etc/network/interfaces
+          register: vlan_exists
+          changed_when: false
+          failed_when: false
+
+        - name: Add VLAN awareness to vmbr0
+          when: vlan_exists.rc != 0
+          blockinfile:
+            path: /etc/network/interfaces
+            marker: "# {mark} ANSIBLE MANAGED - VLAN CONFIG"
+            insertafter: "iface vmbr0"
+            block: |
+              bridge-vlan-aware yes
+              bridge-vids 10 20 30 40
+            backup: true
+
+        - name: Apply network config (safe reload)
+          when: vlan_exists.rc != 0
+          command: ifreload -a
+          register: reload_result
+
+        - name: Wait for network to stabilize
+          when: vlan_exists.rc != 0
+          wait_for:
+            timeout: 5
+
+        - name: Test connectivity after VLAN config
+          when: vlan_exists.rc != 0
+          wait_for:
+            host: "{{ proxmox_ip }}"
+            port: 22
+            timeout: 10
+          delegate_to: localhost
+          become: false
+
+        - name: Success message
+          debug:
+            msg: "VLAN bridge configured. SSH still working. Safe to proceed."
+
+    # === STEP 4: Verify VLAN config ===
+    - name: Verify VLAN configuration
+      tags: [verify]
+      block:
+        - name: Check bridge VLAN config
+          command: bridge vlan show
+          register: bridge_vlans
+          changed_when: false
+
+        - name: Display VLAN configuration
+          debug:
+            var: bridge_vlans.stdout_lines
+
+        - name: Verify vmbr0 is VLAN-aware
+          shell: ip -d link show vmbr0 | grep -q "vlan_filtering 1"
+          register: vlan_filtering
+          changed_when: false
+          failed_when: false
+
+        - name: VLAN filtering status
+          debug:
+            msg: "{{ 'VLAN filtering enabled' if vlan_filtering.rc == 0 else 'VLAN filtering NOT enabled' }}"
+
+    # === STEP 5: Test with VM (manual) ===
+    # This step is documented for manual execution via Proxmox UI or qm command
+    - name: Instructions for VM VLAN testing
+      tags: [vm-test-instructions]
+      debug:
+        msg:
+          - "Next step: Test VLAN on one VM"
+          - "Option 1 - Proxmox UI:"
+          - "  1. Select custom-workloads VM"
+          - "  2. Hardware > Network Device > Edit"
+          - "  3. Set VLAN Tag = 20"
+          - "  4. Apply and restart VM"
+          - "  5. Verify VM still has network access"
+          - ""
+          - "Option 2 - Command line:"
+          - "  qm set 104 -net0 virtio,bridge=vmbr0,tag=20"
+          - "  qm reboot 104"
+          - ""
+          - "After testing, if VM works, run terraform to set all VM VLANs"
+
+    # === ROLLBACK ===
+    - name: Rollback to original config
+      tags: [rollback, never]
+      block:
+        - name: Check if backup exists
+          stat:
+            path: "{{ backup_file }}"
+          register: backup_stat
+
+        - name: Restore backup
+          when: backup_stat.stat.exists
+          copy:
+            src: "{{ backup_file }}"
+            dest: /etc/network/interfaces
+            remote_src: true
+            mode: "0644"
+
+        - name: Reload network config
+          when: backup_stat.stat.exists
+          command: ifreload -a
+
+        - name: Wait for network
+          when: backup_stat.stat.exists
+          wait_for:
+            timeout: 5
+
+        - name: Rollback complete
+          when: backup_stat.stat.exists
+          debug:
+            msg: "Network config restored from backup"
+
+        - name: No backup found
+          when: not backup_stat.stat.exists
+          debug:
+            msg: "No backup found at {{ backup_file }}"
