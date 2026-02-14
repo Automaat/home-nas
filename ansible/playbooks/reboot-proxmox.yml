@@ -1,0 +1,39 @@
+---
+- name: Reboot Proxmox Host
+  hosts: proxmox_hosts
+  become: true
+  tasks:
+    - name: Reboot Proxmox host
+      ansible.builtin.reboot:
+        msg: "Rebooting for GRUB/vfio configuration changes"
+        reboot_timeout: 300
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+
+    - name: Wait for Proxmox to come back online
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 300
+
+    - name: Verify IOMMU enabled
+      ansible.builtin.command:
+        cmd: dmesg | grep -i "AMD-Vi"
+      register: iommu_check
+      changed_when: false
+
+    - name: Display IOMMU status
+      ansible.builtin.debug:
+        var: iommu_check.stdout_lines
+
+    - name: Verify GPU bound to vfio-pci
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          lspci -nnk | grep -A 3 VGA | grep "Kernel driver in use"
+        executable: /bin/bash
+      register: gpu_driver
+      changed_when: false
+
+    - name: Display GPU driver
+      ansible.builtin.debug:
+        var: gpu_driver.stdout_lines
