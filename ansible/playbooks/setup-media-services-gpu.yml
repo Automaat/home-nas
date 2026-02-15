@@ -11,7 +11,7 @@
       loop:
         - /etc/apt/sources.list.d/kisak-ubuntu-kisak-mesa-noble.list
         - /etc/apt/sources.list.d/kisak-ubuntu-kisak-mesa-noble.sources
-      ignore_errors: true
+      failed_when: false
 
     - name: Update apt cache
       ansible.builtin.apt:
@@ -34,9 +34,11 @@
         state: present
 
     - name: Load amdgpu module
-      community.general.modprobe:
-        name: amdgpu
-        state: present
+      ansible.builtin.command:
+        cmd: modprobe amdgpu
+      register: modprobe_result
+      changed_when: modprobe_result.rc == 0
+      failed_when: false
 
     - name: Ensure amdgpu module loads on boot
       ansible.builtin.lineinfile:

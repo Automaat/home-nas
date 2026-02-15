@@ -119,10 +119,31 @@
 
     - name: Configure NFS share for media data
       ansible.builtin.command:
-        cmd: zfs set sharenfs="rw=@192.168.0.0/24,no_root_squash" tank-media/data
+        cmd: zfs set sharenfs="rw=192.168.0.0/24:192.168.20.0/24:192.168.40.0/24,no_root_squash" tank-media/data
       register: zfs_media_result
       changed_when: zfs_media_result.rc == 0
       failed_when: false
+
+    - name: Disable sharenfs on child datasets
+      ansible.builtin.command:
+        cmd: zfs set sharenfs=off "{{ item }}"
+      loop:
+        - tank-media/data/downloads
+        - tank-media/data/downloads/complete
+        - tank-media/data/downloads/incomplete
+        - tank-media/data/media
+        - tank-media/data/media/movies
+        - tank-media/data/media/music
+        - tank-media/data/media/tv
+      register: disable_child_result
+      changed_when: disable_child_result.rc == 0
+      failed_when: false
+
+    - name: Reload NFS exports
+      ansible.builtin.command:
+        cmd: exportfs -ra
+      when: zfs_mac_result.changed or zfs_media_result.changed
+      changed_when: false
 
     - name: Verify NFS exports
       ansible.builtin.command:

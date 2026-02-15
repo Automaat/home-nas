@@ -104,7 +104,7 @@ resource "proxmox_virtual_environment_vm" "media_services" {
     user_account {
       username = "root"
       password = var.vm_default_password
-      keys     = [trimspace(file("~/.ssh/id_ed25519.pub"))]
+      keys     = var.ssh_public_keys
     }
 
     ip_config {

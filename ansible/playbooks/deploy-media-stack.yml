@@ -28,6 +28,8 @@
         path: "{{ item }}"
         state: directory
         mode: '0755'
+        owner: "1000"
+        group: "1000"
       loop:
         - "{{ data_root }}"
         - "{{ data_root }}/gluetun"
@@ -60,7 +62,7 @@
 
     - name: Extract wireguard private key from sops
       ansible.builtin.set_fact:
-        wg_private_key: "{{ lookup('pipe', 'sops -d --extract [\"protonvpn_wg_conf\"] ' + playbook_dir + '/../secrets/secrets.yaml | grep \"PrivateKey = \" | cut -d\" \" -f3') }}"
+        wg_private_key: "{{ lookup('pipe', 'sops -d --extract [\"protonvpn_wg_conf\"] ' + playbook_dir + '/../secrets/secrets.yaml | grep \"PrivateKey\" | awk -F\" = \" \"{print $2}\"') }}"
       no_log: true
       delegate_to: localhost
 
