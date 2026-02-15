@@ -1,5 +1,5 @@
 keys:
-  - &proxmox age1sxza4f6jp9mmv3fhu0fw3j9gd0vfqvwchmn838kxcda5guq9yqqsprv538
+  - &proxmox age1kfklkd3xuacvfu0gy35v7cwk5lw8y9xv0lr5hs2ddyn82ww9mdlslfth6h
 
 creation_rules:
   - path_regex: ansible/secrets/.*\.yaml$
