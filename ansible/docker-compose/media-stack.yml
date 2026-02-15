@@ -132,14 +132,13 @@ services:
     container_name: subgen
     environment:
       - WHISPER_MODEL=base  # Options: tiny, base, small, medium, large-v2, large-v3
-      - TRANSCRIBE_DEVICE=gpu  # Use GPU
+      - TRANSCRIBE_DEVICE=cpu  # AMD GPU not supported, use CPU
       - PROCADDEDMEDIA=True
       - PROCMEDIAONSTART=False
-    devices:
-      - /dev/dri:/dev/dri  # AMD GPU for hardware acceleration
     volumes:
       - /data/subgen/config:/config
       - /data/subgen/log:/log
+      - /data/media:/data/media  # Mount media for file access
     ports:
       - 9000:9000
     restart: unless-stopped
