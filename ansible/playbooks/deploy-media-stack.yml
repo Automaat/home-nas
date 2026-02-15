@@ -38,7 +38,7 @@
         - "{{ data_root }}/sonarr/config"
         - "{{ data_root }}/radarr/config"
         - "{{ data_root }}/lidarr/config"
-        - "{{ data_root }}/readarr/config"
+        - "{{ data_root }}/bookshelf/config"
         - "{{ data_root }}/prowlarr/config"
         - "{{ data_root }}/bazarr/config"
         - "{{ data_root }}/jellyseerr/config"
@@ -107,7 +107,7 @@
         - sonarr
         - radarr
         - lidarr
-        - readarr
+        - bookshelf
         - prowlarr
         - bazarr
         - jellyseerr

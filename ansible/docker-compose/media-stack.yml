@@ -102,15 +102,15 @@ services:
       - 8686:8686
     restart: unless-stopped
 
-  readarr:
-    image: lscr.io/linuxserver/readarr:1.0.1126
-    container_name: readarr
+  bookshelf:
+    image: ghcr.io/pennydreadful/bookshelf:hardcover-v0.4.20.129
+    container_name: bookshelf
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Amsterdam
     volumes:
-      - /data/readarr/config:/config
+      - /data/bookshelf/config:/config
       - /data:/data
     ports:
       - 8787:8787
