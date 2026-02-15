@@ -1,0 +1,94 @@
+---
+- name: Deploy media stack to media-services VM
+  hosts: media-services
+  become: true
+
+  vars:
+    data_root: /data
+    compose_file: /opt/media-stack/docker-compose.yml
+    env_file: /opt/media-stack/.env
+
+  tasks:
+    - name: Install Docker
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ data_root }}"
+        - "{{ data_root }}/gluetun"
+        - "{{ data_root }}/qbittorrent/config"
+        - "{{ data_root }}/jellyfin/config"
+        - "{{ data_root }}/sonarr/config"
+        - "{{ data_root }}/radarr/config"
+        - "{{ data_root }}/prowlarr/config"
+        - "{{ data_root }}/bazarr/config"
+        - "{{ data_root }}/jellyseerr/config"
+        - "{{ data_root }}/downloads"
+        - "{{ data_root }}/downloads/incomplete"
+        - "{{ data_root }}/downloads/complete"
+        - "{{ data_root }}/media"
+        - "{{ data_root }}/media/tv"
+        - "{{ data_root }}/media/movies"
+        - "{{ data_root }}/media/music"
+
+    - name: Create compose directory
+      ansible.builtin.file:
+        path: /opt/media-stack
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/media-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Extract wireguard private key from sops
+      ansible.builtin.set_fact:
+        wg_private_key: "{{ lookup('pipe', 'sops -d --extract [\"protonvpn_wg_conf\"] ' + playbook_dir + '/../secrets/secrets.yaml | grep \"PrivateKey = \" | cut -d\" \" -f3') }}"
+      no_log: true
+      delegate_to: localhost
+
+    - name: Create .env file with wireguard private key
+      ansible.builtin.copy:
+        content: |
+          WIREGUARD_PRIVATE_KEY={{ wg_private_key }}
+        dest: "{{ env_file }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Deploy media stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/media-stack
+        state: present
+        pull: always
+
+    - name: Verify containers are running
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      register: container_info
+      failed_when: not container_info.exists or container_info.container.State.Status != 'running'
+      loop:
+        - gluetun
+        - qbittorrent
+        - jellyfin
+        - sonarr
+        - radarr
+        - prowlarr
+        - bazarr
+        - jellyseerr
