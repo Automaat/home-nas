@@ -1,0 +1,79 @@
+---
+- name: Configure media-services VM with GPU drivers
+  hosts: media-services
+  become: true
+
+  tasks:
+    - name: Remove broken Kisak Mesa PPA
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/kisak-ubuntu-kisak-mesa-noble.list
+        - /etc/apt/sources.list.d/kisak-ubuntu-kisak-mesa-noble.sources
+      ignore_errors: true
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install kernel modules for GPU
+      ansible.builtin.apt:
+        name: "linux-modules-extra-{{ ansible_kernel }}"
+        state: present
+
+    - name: Install Mesa GPU drivers and VA-API
+      ansible.builtin.apt:
+        name:
+          - software-properties-common
+          - mesa-vulkan-drivers
+          - mesa-va-drivers
+          - mesa-vdpau-drivers
+          - vainfo
+        state: present
+
+    - name: Load amdgpu module
+      community.general.modprobe:
+        name: amdgpu
+        state: present
+
+    - name: Ensure amdgpu module loads on boot
+      ansible.builtin.lineinfile:
+        path: /etc/modules-load.d/amdgpu.conf
+        line: amdgpu
+        create: true
+        mode: '0644'
+
+    - name: Add root to video and render groups
+      ansible.builtin.user:
+        name: root
+        groups: video,render
+        append: true
+
+    - name: Verify GPU device exists
+      ansible.builtin.stat:
+        path: /dev/dri/card0
+      register: gpu_device
+
+    - name: Display GPU status
+      ansible.builtin.debug:
+        msg: "GPU device {{ 'found' if gpu_device.stat.exists else 'NOT found' }} at /dev/dri/card0"
+
+    - name: Check for render node
+      ansible.builtin.stat:
+        path: /dev/dri/renderD128
+      register: render_node
+
+    - name: Display render node status
+      ansible.builtin.debug:
+        msg: "Render node {{ 'found' if render_node.stat.exists else 'NOT found' }} at /dev/dri/renderD128"
+
+    - name: Get GPU info
+      ansible.builtin.command: "lspci -nn -d 1002:"
+      register: gpu_info
+      changed_when: false
+
+    - name: Display GPU hardware
+      ansible.builtin.debug:
+        var: gpu_info.stdout_lines
