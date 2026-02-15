@@ -88,6 +88,34 @@ services:
       - 7878:7878
     restart: unless-stopped
 
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:3.1.0.4875-ls20
+    container_name: lidarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Amsterdam
+    volumes:
+      - /data/lidarr/config:/config
+      - /data:/data
+    ports:
+      - 8686:8686
+    restart: unless-stopped
+
+  readarr:
+    image: lscr.io/linuxserver/readarr:1.0.1126
+    container_name: readarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Amsterdam
+    volumes:
+      - /data/readarr/config:/config
+      - /data:/data
+    ports:
+      - 8787:8787
+    restart: unless-stopped
+
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:2.3.0
     container_name: prowlarr
@@ -128,7 +156,7 @@ services:
     restart: unless-stopped
 
   subgen:
-    image: mccloud/subgen:latest
+    image: mccloud/subgen:2026.02.9-cpu
     container_name: subgen
     environment:
       - WHISPER_MODEL=base  # Options: tiny, base, small, medium, large-v2, large-v3
@@ -146,7 +174,7 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.16.1
     container_name: ollama
     devices:
       - /dev/dri:/dev/dri  # AMD GPU for inference
