@@ -13,7 +13,7 @@
       ansible.builtin.apt:
         name:
           - docker.io
-          - docker-compose-plugin
+          - docker-compose-v2
         state: present
         update_cache: true
 
@@ -40,6 +40,8 @@
         - "{{ data_root }}/prowlarr/config"
         - "{{ data_root }}/bazarr/config"
         - "{{ data_root }}/jellyseerr/config"
+        - "{{ data_root }}/whisper/models"
+        - "{{ data_root }}/ollama/models"
         - "{{ data_root }}/downloads"
         - "{{ data_root }}/downloads/incomplete"
         - "{{ data_root }}/downloads/complete"
@@ -61,10 +63,18 @@
         mode: '0644'
 
     - name: Extract wireguard private key from sops
-      ansible.builtin.set_fact:
-        wg_private_key: "{{ lookup('pipe', 'sops -d --extract [\"protonvpn_wg_conf\"] ' + playbook_dir + '/../secrets/secrets.yaml | grep \"PrivateKey\" | awk -F\" = \" \"{print $2}\"') }}"
-      no_log: true
+      ansible.builtin.shell: |
+        sops -d --extract '["protonvpn_wg_conf"]' {{ playbook_dir }}/../secrets/secrets.yaml | grep 'PrivateKey' | awk -F' = ' '{print $2}'
+      register: wg_key_result
       delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set wireguard private key fact
+      ansible.builtin.set_fact:
+        wg_private_key: "{{ wg_key_result.stdout }}"
+      no_log: true
 
     - name: Create .env file with wireguard private key
       ansible.builtin.copy:
@@ -94,3 +104,5 @@
         - prowlarr
         - bazarr
         - jellyseerr
+        - faster-whisper
+        - ollama
