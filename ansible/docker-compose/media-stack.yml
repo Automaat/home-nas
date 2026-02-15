@@ -127,18 +127,18 @@ services:
       - 5055:5055
     restart: unless-stopped
 
-  faster-whisper:
-    image: fedirz/faster-whisper-server:latest-cuda
-    container_name: faster-whisper
+  whisper-asr:
+    image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    container_name: whisper-asr
     environment:
-      - WHISPER__MODEL=base  # Options: tiny, base, small, medium, large-v3
-      - WHISPER__INFERENCE_DEVICE=cuda  # Uses GPU
+      - ASR_MODEL=base  # Options: tiny, base, small, medium, large-v2, large-v3
+      - ASR_ENGINE=faster_whisper  # Use faster-whisper backend
     devices:
       - /dev/dri:/dev/dri  # AMD GPU for hardware acceleration
     volumes:
-      - /data/whisper/models:/root/.cache/huggingface
+      - /data/whisper/models:/root/.cache/whisper
     ports:
-      - 8000:8000
+      - 9000:9000
     restart: unless-stopped
 
   ollama:

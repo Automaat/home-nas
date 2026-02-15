@@ -105,5 +105,5 @@
         - prowlarr
         - bazarr
         - jellyseerr
-        - faster-whisper
+        - whisper-asr
         - ollama
