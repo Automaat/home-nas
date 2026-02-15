@@ -23,18 +23,6 @@ variable "proxmox_node" {
   default     = "pve"
 }
 
-variable "media_services_cores" {
-  description = "Number of CPU cores for media-services VM"
-  type        = number
-  default     = 6
-}
-
-variable "media_services_memory" {
-  description = "Memory in MB for media-services VM"
-  type        = number
-  default     = 20480
-}
-
 variable "infrastructure_cores" {
   description = "Number of CPU cores for infrastructure VM"
   type        = number

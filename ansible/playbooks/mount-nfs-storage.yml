@@ -51,11 +51,12 @@
         mode: '0644'
 
     - name: Mount NFS share
-      ansible.builtin.command:
-        cmd: mount -t nfs {{ nfs_server }}:{{ nfs_export }} {{ mount_point }}
-      register: mount_result
-      changed_when: mount_result.rc == 0
-      failed_when: mount_result.rc != 0
+      ansible.posix.mount:
+        src: "{{ nfs_server }}:{{ nfs_export }}"
+        path: "{{ mount_point }}"
+        fstype: nfs
+        opts: rw,hard,intr,rsize=8192,wsize=8192,timeo=14,nofail
+        state: mounted
 
     - name: Verify NFS mount
       ansible.builtin.command:
@@ -110,4 +111,4 @@
     - name: Display backup location
       ansible.builtin.debug:
         msg: "Old data backed up to {{ backup_dir }} - remove after verification"
-      when: backup_result.changed
+      when: backup_result is defined and backup_result.changed
