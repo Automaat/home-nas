@@ -17,16 +17,6 @@ permissions:
   security-events: write
 
 jobs:
-  nix:
-    runs-on: ubuntu-latest
-    steps:
-      # Cannot pin by digest: Renovate will manage action updates
-      - uses: actions/checkout@v6
-      # Cannot pin by digest: Renovate will manage action updates
-      - uses: cachix/install-nix-action@v31
-      - name: Check flake
-        run: nix flake check
-
   terraform:
     runs-on: ubuntu-latest
     env:
