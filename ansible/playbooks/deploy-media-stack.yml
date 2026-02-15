@@ -64,6 +64,7 @@
 
     - name: Extract wireguard private key from sops
       ansible.builtin.shell: |
+        set -o pipefail
         sops -d --extract '["protonvpn_wg_conf"]' {{ playbook_dir }}/../secrets/secrets.yaml | grep 'PrivateKey' | awk -F' = ' '{print $2}'
       register: wg_key_result
       delegate_to: localhost
