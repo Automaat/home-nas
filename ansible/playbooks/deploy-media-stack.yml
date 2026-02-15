@@ -37,6 +37,8 @@
         - "{{ data_root }}/jellyfin/config"
         - "{{ data_root }}/sonarr/config"
         - "{{ data_root }}/radarr/config"
+        - "{{ data_root }}/lidarr/config"
+        - "{{ data_root }}/readarr/config"
         - "{{ data_root }}/prowlarr/config"
         - "{{ data_root }}/bazarr/config"
         - "{{ data_root }}/jellyseerr/config"
@@ -50,6 +52,7 @@
         - "{{ data_root }}/media/tv"
         - "{{ data_root }}/media/movies"
         - "{{ data_root }}/media/music"
+        - "{{ data_root }}/media/books"
 
     - name: Create compose directory
       ansible.builtin.file:
@@ -103,6 +106,8 @@
         - jellyfin
         - sonarr
         - radarr
+        - lidarr
+        - readarr
         - prowlarr
         - bazarr
         - jellyseerr
