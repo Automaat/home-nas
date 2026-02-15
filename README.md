@@ -1,6 +1,6 @@
 # Home NAS Infrastructure
 
-NixOS + Proxmox-based home NAS with media services, managed via Infrastructure as Code.
+Proxmox-based home NAS with media services, managed via Infrastructure as Code.
 
 ## Architecture
 
@@ -9,15 +9,14 @@ NixOS + Proxmox-based home NAS with media services, managed via Infrastructure a
   - GPU passthrough: AMD 780M iGPU → media-services VM
 
 - **VMs**:
-  - media-services (NixOS): Jellyfin, Sonarr, Radarr, Prowlarr, qBittorrent
-  - infrastructure (NixOS): Caddy reverse proxy
+  - media-services (Ubuntu): Jellyfin, Sonarr, Radarr, Prowlarr, qBittorrent
+  - infrastructure (Ubuntu): Caddy reverse proxy
   - custom-workloads (Ubuntu): User-defined Docker containers
 
 ## Setup
 
 ### Prerequisites
 
-- Nix with flakes enabled
 - OpenTofu
 - Ansible
 - sops + age
@@ -30,10 +29,12 @@ NixOS + Proxmox-based home NAS with media services, managed via Infrastructure a
    # Already done - see plan.md
    ```
 
-2. **Create VM templates** (manual for now):
+2. **Create VM template**:
 
-   - NixOS template
-   - Ubuntu template
+   ```bash
+   cd ansible
+   ansible-playbook -i inventory.yml playbooks/create-ubuntu-cloud-template.yml
+   ```
 
 3. **Deploy infrastructure**:
 
@@ -44,21 +45,7 @@ NixOS + Proxmox-based home NAS with media services, managed via Infrastructure a
    tofu apply
    ```
 
-4. **Deploy NixOS VMs**:
-
-   ```bash
-   nixos-rebuild switch \
-     --flake .#media-services \
-     --target-host root@media-services \
-     --build-host localhost
-
-   nixos-rebuild switch \
-     --flake .#infrastructure \
-     --target-host root@infrastructure \
-     --build-host localhost
-   ```
-
-5. **Deploy Ubuntu containers**:
+4. **Deploy containers**:
 
    ```bash
    cd ansible
@@ -67,23 +54,23 @@ NixOS + Proxmox-based home NAS with media services, managed via Infrastructure a
 
 ## Secrets Management
 
-Secrets are encrypted with sops-nix using age encryption:
+Secrets are encrypted with sops using age encryption:
 
 ```bash
 # Edit secrets
-sops nixos/secrets/secrets.yaml
+sops ansible/secrets/secrets.yaml
 
 # Decrypt to view
-sops -d nixos/secrets/secrets.yaml
+sops -d ansible/secrets/secrets.yaml
 ```
 
-Age key is derived from Proxmox SSH host key and stored in VMs at `/var/lib/sops-nix/key.txt`.
+Age key is derived from Proxmox SSH host key.
 
 ## Maintenance
 
 - Renovate creates PRs for dependency updates
 - GitHub Actions validates changes on PRs
-- Manual deployment via nixos-rebuild and ansible-playbook
+- Manual deployment via ansible-playbook
 
 ## Storage Layout
 

@@ -2,7 +2,7 @@ keys:
   - &proxmox age1sxza4f6jp9mmv3fhu0fw3j9gd0vfqvwchmn838kxcda5guq9yqqsprv538
 
 creation_rules:
-  - path_regex: nixos/secrets/.*\.yaml$
+  - path_regex: ansible/secrets/.*\.yaml$
     key_groups:
       - age:
           - *proxmox
