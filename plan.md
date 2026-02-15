@@ -294,16 +294,11 @@
   - Timezone, locale
 
 ### [x] Create Media Services VM Config
-- [ ] Create `nixos/hosts/media-services/configuration.nix`
-- [ ] Create `nixos/hosts/media-services/hardware.nix`:
-  - GPU passthrough (vfio-pci)
-  - NFS mount (/tank-media/data → /data)
-- [ ] Create `nixos/hosts/media-services/docker-compose.nix`:
-  - Enable Docker
-  - Define Jellyfin container (with GPU device)
-  - Define Arr stack containers
-  - Define qBittorrent container
-  - All use `/data` volumes
+
+- [x] Using Ubuntu with Docker instead of NixOS (simpler deployment)
+- [x] GPU passthrough configured (AMD 780M iGPU via UEFI/OVMF)
+- [x] Docker Compose stack deployed via Ansible
+- [x] All services using `/data` volumes from tank-media
 
 ### [x] Create Infrastructure VM Config
 - [ ] Create `nixos/hosts/infrastructure/configuration.nix`
@@ -316,10 +311,15 @@
 ### [x] Create OpenTofu Configuration
 
 - [x] Create `terraform/main.tf`:
-  - Proxmox provider config
+  - Proxmox provider config (bpg/proxmox)
   - 3 VM resources (media-services, infrastructure, custom-workloads)
-  - Simple networking (single vmbr0 bridge, no VLANs)
-  - GPU passthrough for media-services VM (AMD 780M at 0000:01:00.0)
+  - VLAN networking (VLANs 10, 20, 30, 40)
+  - GPU passthrough for media-services VM:
+    - BIOS: OVMF (UEFI) for ROM file support
+    - AMD 780M iGPU: 0000:01:00.0 with vbios_8845hs.bin
+    - AMD Audio: 0000:01:00.1 with AMDGopDriver_8845hs.rom
+    - Cloud-init vendor data for automated driver install
+    - kvm_arguments to hide virtualization
 - [x] Create `terraform/storage.tf`:
   - NFS share documentation
   - Ansible playbook reference for configuration
@@ -353,15 +353,24 @@
   - Automated Ubuntu cloud template creation
   - Cloud-init configuration with SSH keys
   - Template ID 9001, ready for VM deployment
-- [ ] Create `ansible/playbooks/deploy-containers.yml`:
-  - Install Docker Engine
-  - Install Docker Compose plugin
-  - Install GPU drivers (if eGPU configured):
-    - NVIDIA: nvidia-driver-535, nvidia-container-toolkit
-    - AMD: rocm-dkms (if needed)
-  - Deploy all compose files from `../docker-compose/`
-- [ ] Create example `ansible/docker-compose/app1.yml`
+- [x] Create `ansible/playbooks/deploy-media-stack.yml`:
+  - Install Docker Engine and Docker Compose v2
+  - Install Mesa VA-API drivers for AMD GPU
+  - Deploy media stack compose file
+  - Verify all containers running
+- [x] Create `ansible/playbooks/setup-media-services-gpu.yml`:
+  - Install linux-modules-extra for amdgpu driver
+  - Install Mesa GPU drivers (VA-API, VDPAU, Vulkan)
+  - Load amdgpu module and configure autoload
+  - Verify GPU device accessible
+- [x] Create `ansible/docker-compose/media-stack.yml`:
+  - Gluetun (VPN for qBittorrent)
+  - qBittorrent (with VPN)
+  - Jellyfin (with GPU /dev/dri)
+  - Sonarr, Radarr, Prowlarr, Bazarr
+  - Jellyseerr
 - [ ] Create `ansible/docker-compose/gpu-test.yml` (if eGPU configured):
+
   ```yaml
   services:
     gpu-test:
@@ -432,10 +441,10 @@
 **VM IP Assignments:**
 
 - infrastructure: 192.168.10.222 (VLAN 10)
-- media-services: 192.168.20.247 (VLAN 20)
+- media-services: 192.168.20.191 (VLAN 20), 192.168.40.230 (VLAN 40)
 - custom-workloads: 192.168.20.106 (VLAN 20)
 
-**Note:** 2nd NICs on infrastructure (VLAN 30) and media-services (VLAN 40) need manual configuration - cloud-init only configures primary interface.
+**Note:** media-services 2nd NIC (VLAN 40) configured via cloud-init. infrastructure 2nd NIC (VLAN 30) needs manual configuration.
 
 ### [x] Verify Connectivity
 
@@ -443,23 +452,27 @@
 - [x] Ansible connectivity verified
 - [x] Updated ansible/inventory.yml with correct IPs
 
-### [ ] Deploy Docker + Services
+### [x] Deploy Docker + Services
 
-- [ ] Create Docker Compose files for media stack
-- [ ] Deploy to media-services:
+- [x] Created Docker Compose file for media stack
+- [x] Deployed to media-services:
 
   ```bash
-  ansible-playbook -i ansible/inventory.yml playbooks/deploy-containers.yml --limit media-services
+  ansible-playbook -i ansible/inventory.yml playbooks/deploy-media-stack.yml
   ```
 
-- [ ] Verify: `ssh root@media-services docker ps`
+- [x] Verified: All containers running
 
-**Services to deploy:**
+**Services deployed:**
 
-- Jellyfin (with GPU transcoding)
-- Sonarr, Radarr, Prowlarr
-- qBittorrent
-- Caddy (on infrastructure VM)
+- Jellyfin (with GPU transcoding via /dev/dri/card0) - http://192.168.20.191:8096
+- Sonarr - http://192.168.20.191:8989
+- Radarr - http://192.168.20.191:7878
+- Prowlarr - http://192.168.20.191:9696
+- Bazarr - http://192.168.20.191:6767
+- qBittorrent (via Gluetun VPN) - http://192.168.20.191:8080
+- Jellyseerr - http://192.168.20.191:5055
+- [ ] Caddy (on infrastructure VM) - TODO
 
 ## Next Steps
 
@@ -573,15 +586,17 @@
 
 ## Validation
 
-### [ ] Test GPU Passthrough
+### [x] Test GPU Passthrough
 
 **Test iGPU (media-services VM):**
-- [ ] SSH to media-services: `ssh root@media-services`
-- [ ] Verify GPU visible: `lspci | grep -i vga`
-- [ ] Install radeontop: `nix-shell -p radeontop`
-- [ ] Run: `radeontop`
-- [ ] Play 4K video in Jellyfin
-- [ ] Verify GPU usage in radeontop
+
+- [x] SSH to media-services: `ssh root@192.168.20.191`
+- [x] Verified GPU visible: AMD Phoenix3 (780M) at 0000:01:00.0
+- [x] Verified amdgpu driver loaded
+- [x] Verified GPU device: /dev/dri/card0
+- [x] Jellyfin container has GPU access
+- [ ] Test 4K video transcoding in Jellyfin
+- [ ] Monitor GPU usage during transcode
 
 **Test eGPU (custom-workloads VM, if configured):**
 - [ ] SSH to custom-workloads: `ssh ubuntu@custom-workloads`
