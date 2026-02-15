@@ -130,9 +130,11 @@ services:
   subgen:
     image: mccloud/subgen:latest
     container_name: subgen
+    command: --monitor /data/media --whisper-model base --transcribe-device cpu
     environment:
       - WHISPER_MODEL=base  # Options: tiny, base, small, medium, large-v2, large-v3
       - TRANSCRIBE_DEVICE=cpu  # AMD GPU not supported, use CPU
+      - USE_PATH_MAPPING=True  # Enable Bazarr path-based API
       - PROCADDEDMEDIA=True
       - PROCMEDIAONSTART=False
     volumes:
