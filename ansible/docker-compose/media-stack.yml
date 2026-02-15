@@ -20,6 +20,7 @@ services:
       - VPN_PORT_FORWARDING_PROVIDER=protonvpn
       - FIREWALL_VPN_INPUT_PORTS=51820
       - FIREWALL_OUTBOUND_SUBNETS=192.168.20.0/24,192.168.40.0/24
+      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'for i in 1 2 3 4 5; do wget -qO- --post-data "json={\"listen_port\":{{PORTS}}}" http://localhost:8080/api/v2/app/setPreferences && break || sleep 5; done'
     volumes:
       - /data/gluetun:/gluetun
     restart: unless-stopped
