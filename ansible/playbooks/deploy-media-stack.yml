@@ -45,6 +45,7 @@
         - "{{ data_root }}/subgen/config"
         - "{{ data_root }}/subgen/log"
         - "{{ data_root }}/ollama/models"
+        - "{{ data_root }}/navidrome/config"
         - "{{ data_root }}/downloads"
         - "{{ data_root }}/downloads/incomplete"
         - "{{ data_root }}/downloads/complete"
@@ -113,3 +114,4 @@
         - jellyseerr
         - subgen
         - ollama
+        - navidrome
