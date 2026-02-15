@@ -13,9 +13,10 @@ all:
         media_services:
           hosts:
             media-services:
-              ansible_host: 192.168.20.247
+              ansible_host: 192.168.20.191
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
+              # VM 100 with AMD 780M GPU passthrough (UEFI + cloud-init)
 
         infrastructure_vms:
           hosts:

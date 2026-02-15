@@ -58,3 +58,10 @@ variable "custom_workloads_memory" {
   type        = number
   default     = 28672
 }
+
+variable "vm_default_password" {
+  description = "Default password for cloud-init VMs"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
