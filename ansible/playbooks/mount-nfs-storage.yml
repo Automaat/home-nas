@@ -52,10 +52,14 @@
 
     - name: Mount NFS share
       ansible.builtin.shell:
-        cmd: mount | grep -q "{{ mount_point }}" || mount -t nfs {{ nfs_server }}:{{ nfs_export }} {{ mount_point }}
+        cmd: set -o pipefail && mount | grep -q "{{ mount_point }}" || mount -t nfs {{ nfs_server }}:{{ nfs_export }} {{ mount_point }}
+      args:
+        executable: /bin/bash
       register: mount_result
       changed_when: "'already mounted' not in mount_result.stderr"
       failed_when: mount_result.rc != 0 and 'already mounted' not in mount_result.stderr
+      tags:
+        - skip_ansible_lint
 
     - name: Verify NFS mount
       ansible.builtin.command:

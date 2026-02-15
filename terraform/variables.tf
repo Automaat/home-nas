@@ -53,3 +53,9 @@ variable "vm_default_password" {
   sensitive   = true
   default     = ""
 }
+
+variable "ssh_public_keys" {
+  description = "SSH public keys for VM access"
+  type        = list(string)
+  default     = []
+}
