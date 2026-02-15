@@ -11,15 +11,16 @@ services:
       - 6881:6881  # qBittorrent TCP
       - 6881:6881/udp  # qBittorrent UDP
     environment:
-      - VPN_SERVICE_PROVIDER=custom
+      - VPN_SERVICE_PROVIDER=protonvpn
       - VPN_TYPE=wireguard
-      - VPN_ENDPOINT_IP=46.29.25.5
-      - VPN_ENDPOINT_PORT=51820
-      - WIREGUARD_PUBLIC_KEY=lK9RKsf9y5/jehblqhoSGV7FtlErG7QqLy13G3IV2Ao=
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
-      - WIREGUARD_ADDRESSES=10.2.0.2/32
+      - SERVER_COUNTRIES=Netherlands
+      - PORT_FORWARD_ONLY=on
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_PROVIDER=protonvpn
       - FIREWALL_VPN_INPUT_PORTS=51820
-      - FIREWALL_OUTBOUND_SUBNETS=192.168.20.0/24,192.168.40.0/24  # Allow local network
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.20.0/24,192.168.40.0/24
+      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'for i in 1 2 3 4 5; do wget -qO- --post-data "json={\"listen_port\":{{PORTS}}}" http://localhost:8080/api/v2/app/setPreferences && break || sleep 5; done'
     volumes:
       - /data/gluetun:/gluetun
     restart: unless-stopped
@@ -124,4 +125,32 @@ services:
       - /data/jellyseerr/config:/app/config
     ports:
       - 5055:5055
+    restart: unless-stopped
+
+  faster-whisper:
+    image: fedirz/faster-whisper-server:latest-cuda
+    container_name: faster-whisper
+    environment:
+      - WHISPER__MODEL=base  # Options: tiny, base, small, medium, large-v3
+      - WHISPER__INFERENCE_DEVICE=cuda  # Uses GPU
+    devices:
+      - /dev/dri:/dev/dri  # AMD GPU for hardware acceleration
+    volumes:
+      - /data/whisper/models:/root/.cache/huggingface
+    ports:
+      - 8000:8000
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    devices:
+      - /dev/dri:/dev/dri  # AMD GPU for inference
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0  # AMD 780M compatibility
+    volumes:
+      - /data/ollama/models:/root/.ollama
+    ports:
+      - 11434:11434
     restart: unless-stopped
