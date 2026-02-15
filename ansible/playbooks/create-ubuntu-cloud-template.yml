@@ -6,7 +6,9 @@
     template_id: 9001
     template_name: "ubuntu-template"
     ubuntu_version: "24.04"
-    cloud_image_url: "https://cloud-images.ubuntu.com/releases/{{ ubuntu_version }}/release/ubuntu-{{ ubuntu_version }}-server-cloudimg-amd64.img"
+    cloud_image_url: >-
+      https://cloud-images.ubuntu.com/releases/{{ ubuntu_version }}/release/
+      ubuntu-{{ ubuntu_version }}-server-cloudimg-amd64.img
     storage: "tank-vms"
     ssh_public_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
 
