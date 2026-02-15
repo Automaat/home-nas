@@ -1,0 +1,113 @@
+---
+- name: Mount NFS storage on media-services VM
+  hosts: media-services
+  become: true
+
+  vars:
+    nfs_server: 192.168.0.101
+    nfs_export: /tank-media/data
+    mount_point: /data
+    backup_dir: /data.backup
+
+  tasks:
+    - name: Install NFS client
+      ansible.builtin.apt:
+        name: nfs-common
+        state: present
+        update_cache: true
+
+    - name: Stop Docker containers
+      ansible.builtin.command:
+        cmd: docker compose -f /opt/media-stack/docker-compose.yml down
+      args:
+        chdir: /opt/media-stack
+      failed_when: false
+      changed_when: false
+
+    - name: Check if mount point has data
+      ansible.builtin.stat:
+        path: "{{ mount_point }}"
+      register: mount_stat
+
+    - name: Backup existing data if present
+      ansible.builtin.command:
+        cmd: mv {{ mount_point }} {{ backup_dir }}
+      when: mount_stat.stat.exists and mount_stat.stat.isdir
+      register: backup_result
+      changed_when: backup_result.rc == 0
+
+    - name: Create mount point directory
+      ansible.builtin.file:
+        path: "{{ mount_point }}"
+        state: directory
+        mode: '0755'
+
+    - name: Add NFS mount to fstab with nofail option
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        line: "{{ nfs_server }}:{{ nfs_export }} {{ mount_point }} nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,nofail 0 0"
+        state: present
+        create: true
+        mode: '0644'
+
+    - name: Mount NFS share
+      ansible.builtin.command:
+        cmd: mount -t nfs {{ nfs_server }}:{{ nfs_export }} {{ mount_point }}
+      register: mount_result
+      changed_when: mount_result.rc == 0
+      failed_when: mount_result.rc != 0
+
+    - name: Verify NFS mount
+      ansible.builtin.command:
+        cmd: df -h {{ mount_point }}
+      register: df_result
+      changed_when: false
+
+    - name: Display mount info
+      ansible.builtin.debug:
+        var: df_result.stdout_lines
+
+    - name: Verify ZFS datasets accessible
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dataset_check
+      failed_when: not dataset_check.stat.exists
+      loop:
+        - "{{ mount_point }}/media"
+        - "{{ mount_point }}/downloads"
+
+    - name: Set ownership on mounted directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "1000"
+        group: "1000"
+        recurse: true
+      loop:
+        - "{{ mount_point }}/media"
+        - "{{ mount_point }}/downloads"
+
+    - name: Start Docker containers
+      ansible.builtin.command:
+        cmd: docker compose -f /opt/media-stack/docker-compose.yml up -d
+      args:
+        chdir: /opt/media-stack
+      changed_when: true
+
+    - name: Wait for containers to be healthy
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Verify containers running
+      ansible.builtin.command:
+        cmd: docker ps --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
+      register: containers
+      changed_when: false
+
+    - name: Display container status
+      ansible.builtin.debug:
+        var: containers.stdout_lines
+
+    - name: Display backup location
+      ansible.builtin.debug:
+        msg: "Old data backed up to {{ backup_dir }} - remove after verification"
+      when: backup_result.changed
