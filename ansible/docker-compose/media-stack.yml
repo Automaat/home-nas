@@ -127,16 +127,19 @@ services:
       - 5055:5055
     restart: unless-stopped
 
-  whisper-asr:
-    image: onerahmet/openai-whisper-asr-webservice:latest-gpu
-    container_name: whisper-asr
+  subgen:
+    image: mccloud/subgen:latest
+    container_name: subgen
     environment:
-      - ASR_MODEL=base  # Options: tiny, base, small, medium, large-v2, large-v3
-      - ASR_ENGINE=faster_whisper  # Use faster-whisper backend
+      - WHISPER_MODEL=base  # Options: tiny, base, small, medium, large-v2, large-v3
+      - TRANSCRIBE_DEVICE=gpu  # Use GPU
+      - PROCADDEDMEDIA=True
+      - PROCMEDIAONSTART=False
     devices:
       - /dev/dri:/dev/dri  # AMD GPU for hardware acceleration
     volumes:
-      - /data/whisper/models:/root/.cache/whisper
+      - /data/subgen/config:/config
+      - /data/subgen/log:/log
     ports:
       - 9000:9000
     restart: unless-stopped

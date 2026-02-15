@@ -40,7 +40,8 @@
         - "{{ data_root }}/prowlarr/config"
         - "{{ data_root }}/bazarr/config"
         - "{{ data_root }}/jellyseerr/config"
-        - "{{ data_root }}/whisper/models"
+        - "{{ data_root }}/subgen/config"
+        - "{{ data_root }}/subgen/log"
         - "{{ data_root }}/ollama/models"
         - "{{ data_root }}/downloads"
         - "{{ data_root }}/downloads/incomplete"
@@ -105,5 +106,5 @@
         - prowlarr
         - bazarr
         - jellyseerr
-        - whisper-asr
+        - subgen
         - ollama
