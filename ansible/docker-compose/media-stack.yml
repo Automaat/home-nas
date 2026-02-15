@@ -115,7 +115,7 @@ services:
     restart: unless-stopped
 
   jellyseerr:
-    image: fallenbagel/jellyseerr:2.3.0
+    image: fallenbagel/jellyseerr:2.7.3
     container_name: jellyseerr
     environment:
       - LOG_LEVEL=info
