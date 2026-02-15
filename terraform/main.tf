@@ -1,5 +1,10 @@
 terraform {
   required_version = ">= 1.9.0"
+
+  backend "local" {
+    path = "terraform.tfstate"
+  }
+
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
@@ -15,7 +20,7 @@ provider "proxmox" {
   password = var.proxmox_password
 }
 
-# Media Services VM
+# Media Services VM - Ubuntu UEFI with GPU Passthrough
 resource "proxmox_virtual_environment_vm" "media_services" {
   name      = "media-services"
   node_name = var.proxmox_node
@@ -23,16 +28,16 @@ resource "proxmox_virtual_environment_vm" "media_services" {
   vm_id     = 100
   machine   = "q35"
 
-  clone {
-    vm_id = 9001 # ubuntu-template
-  }
+  # UEFI BIOS required for GPU ROM files
+  bios = "ovmf"
 
   cpu {
-    cores = var.media_services_cores
+    cores = 6
+    type  = "host"
   }
 
   memory {
-    dedicated = var.media_services_memory
+    dedicated = 16384
   }
 
   agent {
@@ -46,7 +51,7 @@ resource "proxmox_virtual_environment_vm" "media_services" {
     vlan_id = 20
   }
 
-  # Downloads network (VLAN 40 - qBittorrent)
+  # Downloads network (VLAN 40)
   network_device {
     bridge  = "vmbr0"
     model   = "virtio"
@@ -55,16 +60,86 @@ resource "proxmox_virtual_environment_vm" "media_services" {
 
   # GPU passthrough (AMD 780M iGPU)
   hostpci {
-    device = "hostpci0"
-    id     = "0000:01:00.0"
-    pcie   = true
-    rombar = true
+    device   = "hostpci0"
+    id       = "0000:01:00.0"
+    pcie     = true
+    rom_file = "vbios_8845hs.bin"
   }
 
+  # Audio device (required for UEFI GPU passthrough)
+  hostpci {
+    device   = "hostpci1"
+    id       = "0000:01:00.1"
+    pcie     = true
+    rom_file = "AMDGopDriver_8845hs.rom"
+  }
+
+  # EFI disk
+  efi_disk {
+    datastore_id      = "tank-vms"
+    file_format       = "raw"
+    type              = "4m"
+    pre_enrolled_keys = true
+  }
+
+  # System disk
   disk {
     datastore_id = "tank-vms"
     interface    = "scsi0"
-    size         = 32
+    size         = 64
+    file_format  = "raw"
+  }
+
+  # Cloud-init drive
+  cdrom {
+    enabled   = true
+    file_id   = "tank-vms:cloudinit"
+    interface = "ide2"
+  }
+
+  # Cloud-init configuration
+  initialization {
+    datastore_id = "tank-vms"
+
+    user_account {
+      username = "root"
+      password = var.vm_default_password
+      keys     = [trimspace(file("~/.ssh/id_ed25519.pub"))]
+    }
+
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+
+    # Vendor data for automated setup
+    vendor_data_file_id = "local:snippets/vendor.yaml"
+  }
+
+  # Hide virtualization from guest (required for GPU drivers)
+  kvm_arguments = "-cpu host,kvm=off,-hypervisor"
+
+  # Lifecycle management
+  lifecycle {
+    ignore_changes = [
+      # Ignore cloud-init changes after first boot
+      initialization[0].user_account[0].password,
+    ]
+  }
+}
+
+output "media_services_info" {
+  value = {
+    vm_id   = proxmox_virtual_environment_vm.media_services.vm_id
+    name    = proxmox_virtual_environment_vm.media_services.name
+    message = "VM will auto-install guest agent and GPU drivers on first boot"
   }
 }
 
@@ -74,10 +149,6 @@ resource "proxmox_virtual_environment_vm" "infrastructure" {
   node_name = var.proxmox_node
   on_boot   = true
   vm_id     = 101
-
-  clone {
-    vm_id = 9001 # ubuntu-template
-  }
 
   cpu {
     cores = var.infrastructure_cores
@@ -118,10 +189,6 @@ resource "proxmox_virtual_environment_vm" "custom_workloads" {
   node_name = var.proxmox_node
   on_boot   = true
   vm_id     = 102
-
-  clone {
-    vm_id = 9001 # ubuntu-template
-  }
 
   cpu {
     cores = var.custom_workloads_cores
