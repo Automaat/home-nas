@@ -51,12 +51,11 @@
         mode: '0644'
 
     - name: Mount NFS share
-      ansible.posix.mount:
-        src: "{{ nfs_server }}:{{ nfs_export }}"
-        path: "{{ mount_point }}"
-        fstype: nfs
-        opts: rw,hard,intr,rsize=8192,wsize=8192,timeo=14,nofail
-        state: mounted
+      ansible.builtin.shell:
+        cmd: mount | grep -q "{{ mount_point }}" || mount -t nfs {{ nfs_server }}:{{ nfs_export }} {{ mount_point }}
+      register: mount_result
+      changed_when: "'already mounted' not in mount_result.stderr"
+      failed_when: mount_result.rc != 0 and 'already mounted' not in mount_result.stderr
 
     - name: Verify NFS mount
       ansible.builtin.command:

@@ -11,7 +11,7 @@
       loop:
         - /etc/apt/sources.list.d/kisak-ubuntu-kisak-mesa-noble.list
         - /etc/apt/sources.list.d/kisak-ubuntu-kisak-mesa-noble.sources
-      ignore_errors: true
+      failed_when: false
 
     - name: Update apt cache
       ansible.builtin.apt:
