@@ -200,14 +200,13 @@
 - [x] Initialize git: `git init`
 - [x] Create base structure:
   ```bash
-  mkdir -p terraform nixos/{hosts/{media-services,infrastructure},modules,secrets} \
-           ansible/{playbooks,docker-compose} docs .github/workflows
+  mkdir -p terraform ansible/{playbooks,docker-compose,secrets} docs .github/workflows
   ```
 
 ### [x] Setup Secrets Management
 - [x] Get Proxmox SSH host key: `ssh root@proxmox-ip cat /etc/ssh/ssh_host_ed25519_key.pub`
 - [x] Generate age key: `nix-shell -p ssh-to-age --run 'echo "<pubkey>" | ssh-to-age'`
-- [x] Create `nixos/secrets/.sops.yaml`:
+- [x] Create `ansible/secrets/.sops.yaml`:
   ```yaml
   keys:
     - &admin age1xxx...
@@ -218,59 +217,17 @@
             - *admin
   ```
 
-- [x] Create `nixos/secrets/secrets.yaml` with:
+- [x] Create `ansible/secrets/secrets.yaml` with:
 
   - jellyfin_api_key
   - sonarr_api_key
   - radarr_api_key
   - prowlarr_api_key
   - qbittorrent_password
-- [x] Encrypt: `sops nixos/secrets/secrets.yaml`
+  - cloudflare_tunnel_token
+- [x] Encrypt: `sops ansible/secrets/secrets.yaml`
 
 ## Infrastructure as Code
-
-### [x] Create Flake Configuration
-
-- [x] Create `flake.nix`:
-
-  ```nix
-  {
-    inputs = {
-      nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-      sops-nix.url = "github:Mic92/sops-nix";
-    };
-    outputs = { nixpkgs, sops-nix, ... }: {
-      nixosConfigurations = {
-        media-services = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = [
-            sops-nix.nixosModules.sops
-            ./nixos/common.nix
-            ./nixos/hosts/media-services/configuration.nix
-          ];
-        };
-        infrastructure = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = [
-            sops-nix.nixosModules.sops
-            ./nixos/common.nix
-            ./nixos/hosts/infrastructure/configuration.nix
-          ];
-        };
-      };
-    };
-  }
-  ```
-- [x] Run `nix flake update`
-
-### [x] Create NixOS Common Config
-
-- [x] Create `nixos/common.nix`:
-  - Base packages
-  - SSH config (keys from environment-as-code)
-  - Firewall defaults
-  - User accounts
-  - Timezone, locale
 
 ### [x] Create Media Services Architecture
 
@@ -307,22 +264,28 @@
 - Subordinate GID mapping: video (44) and render (993) groups mapped
 - All containers use bind mounts (NOT VirtioFS/NFS) for hardlink support
 
-### [x] Create Infrastructure VM Config
-- [ ] Create `nixos/hosts/infrastructure/configuration.nix`
-- [ ] Create `nixos/hosts/infrastructure/caddy.nix`:
-  - Caddy service config
-  - Reverse proxy rules (jellyfin.yourdomain.com)
+### [x] Create Infrastructure LXC
+- [ ] Create LXC 101 for infrastructure services
+- [ ] Create `ansible/playbooks/setup-infrastructure-lxc.yml`:
+  - Create unprivileged LXC container
+  - Static IP: 192.168.10.222 (VLAN 10)
+  - Install Docker
+  - Deploy cloudflared container
+- [ ] Create `ansible/docker-compose/infrastructure-stack.yml`:
+  - cloudflared (Cloudflare Tunnel)
+  - Tunnel routes (jellyfin.yourdomain.com → http://192.168.20.191:8096)
   - WebSocket support
-  - Auto-HTTPS
+  - HTTPS handled by Cloudflare (no local certs needed)
 
 ### [x] Create OpenTofu Configuration
 
 - [x] Create `terraform/main.tf`:
   - Proxmox provider config (bpg/proxmox)
-  - 2 VM resources (infrastructure, custom-workloads)
-  - ~~media-services VM~~ (decommissioned - replaced by LXC containers)
+  - 1 VM resource (custom-workloads)
+  - ~~infrastructure VM~~ (replaced by LXC 101)
+  - ~~media-services VM~~ (decommissioned - replaced by LXC 110+111+112)
   - VLAN networking (VLANs 10, 20, 30, 40)
-  - LXC containers managed via Ansible (not Terraform)
+  - All LXC containers managed via Ansible (not Terraform)
 - [x] Create `terraform/storage.tf`:
   - NFS share documentation
   - Ansible playbook reference for configuration
@@ -339,7 +302,8 @@
 - [x] Create `ansible/inventory.yml`:
   - Proxmox host + VMs + LXC containers
   - ~~media-services VM~~ (removed)
-  - Added: jellyfin_lxc, media_management_lxc, downloads_lxc
+  - ~~infrastructure VM~~ (replaced by LXC)
+  - LXC containers: infrastructure_lxc, jellyfin_lxc, media_management_lxc, downloads_lxc
 - [x] Create `ansible/playbooks/configure-proxmox.yml`:
   - Disable enterprise repos, add no-subscription repo
   - ~~Configure GRUB for GPU passthrough~~ (not needed for LXC)
@@ -375,6 +339,11 @@
   - Install Docker in each container
   - Deploy compose stacks
   - Preserve existing configurations
+- [ ] Create `ansible/playbooks/setup-infrastructure-lxc.yml`:
+  - Create LXC 101 for infrastructure services
+  - Static IP: 192.168.10.222 (VLAN 10)
+  - Install Docker
+  - Deploy cloudflared container
 - [x] Create `ansible/docker-compose/jellyfin-stack.yml`:
   - Jellyfin (with GPU /dev/dri)
   - Jellyseerr
@@ -387,6 +356,9 @@
 - [x] Create `ansible/docker-compose/downloads-stack.yml`:
   - Gluetun (VPN with WireGuard)
   - qBittorrent (network_mode: service:gluetun)
+- [ ] Create `ansible/docker-compose/infrastructure-stack.yml`:
+  - cloudflared (Cloudflare Tunnel)
+  - Routes external traffic to internal services
 - [ ] Create `ansible/docker-compose/gpu-test.yml` (if eGPU configured):
 
   ```yaml
@@ -416,34 +388,32 @@
 
 ### [x] Create CI/CD Workflows
 - [ ] Create `.github/workflows/validate.yml`:
-  - Run `nix flake check`
   - Run `tofu validate`
   - Run `ansible-playbook --syntax-check`
-- [ ] Create `.github/workflows/deploy-nixos.yml`:
+  - Run `yamllint` and `ansible-lint`
+- [ ] Create `.github/workflows/deploy-infra.yml`:
   - Trigger on merge to main
   - Run `tofu apply`
-  - Run `nixos-rebuild switch` for both VMs
-- [ ] Create `.github/workflows/deploy-custom.yml`:
+  - Run Ansible playbooks for LXC deployment
+- [ ] Create `.github/workflows/deploy-containers.yml`:
   - Trigger on changes to `ansible/docker-compose/`
   - Run `ansible-playbook deploy-containers.yml`
 
 ## Deployment
 
-**Architecture Decision:** Using LXC containers for media services (better GPU compatibility) + Ubuntu VMs for other workloads.
+**Architecture Decision:** Using LXC containers for all services (better GPU compatibility, lighter weight).
 
 ### [x] Deploy Infrastructure
 
 - [x] Switched from telmate/proxmox to bpg/proxmox provider (better maintained)
 - [x] Plan: `cd terraform && tofu plan -out=plan.tfplan`
 - [x] Apply: `tofu apply plan.tfplan`
-- [x] ~~Fix: Added `machine = "q35"` for GPU passthrough support~~ (VM approach abandoned)
-- [x] Verify VMs created in Proxmox
 - [x] Migrated media-services VM to 3 LXC containers (2026-02-16)
 - [x] Decommissioned media-services VM (100)
+- [ ] Replace infrastructure VM with LXC 101
 
 **Active VMs:**
 
-- infrastructure (101): 2 cores, 4GB RAM, VLANs 10+30
 - custom-workloads (102): 4 cores, 28GB RAM, VLAN 20
 
 **Active LXC Containers:**
@@ -452,9 +422,14 @@
 - media-management (111): 192.168.20.192, VLAN 20
 - downloads (112): 192.168.40.162, VLAN 40
 
+**Planned LXC:**
+
+- infrastructure (101): 192.168.10.222, VLAN 10, cloudflared
+
 **Decommissioned:**
 
 - ~~media-services (100)~~: Replaced by LXC 110+111+112
+- ~~infrastructure VM (101)~~: To be replaced by LXC 101
 
 ### [x] Configure VLAN Routing
 
@@ -469,16 +444,16 @@
 
 **VM IP Assignments:**
 
-- infrastructure: 192.168.10.222 (VLAN 10)
 - custom-workloads: 192.168.20.106 (VLAN 20)
 
 **LXC IP Assignments (Static):**
 
+- infrastructure (101): 192.168.10.222 (VLAN 10) - planned
 - jellyfin (110): 192.168.20.191 (VLAN 20)
 - media-management (111): 192.168.20.192 (VLAN 20)
 - downloads (112): 192.168.40.162 (VLAN 40)
 
-**Note:** LXC containers use static IPs configured via `pct set`. infrastructure 2nd NIC (VLAN 30) needs manual configuration.
+**Note:** LXC containers use static IPs configured via `pct set`.
 
 ### [x] Verify Connectivity
 
@@ -569,47 +544,46 @@
 - qBittorrent (via Gluetun VPN) - http://192.168.40.162:8080
 - Gluetun (WireGuard VPN) - healthy
 
-**TODO:**
+**Status (2026-02-16):**
 
-- [ ] Caddy (on infrastructure VM) - reverse proxy
+- [x] All services deployed and running
+- [x] Basic configuration complete (media libraries, indexers, download clients)
+- [x] Workflow validated (Prowlarr → Sonarr/Radarr → qBittorrent → Jellyfin)
+- [x] Hardlinks working correctly
+- [ ] GPU transcoding not yet tested
+- [ ] Cloudflare Tunnel pending
+- [ ] Mac NFS storage pending
 
 ## Next Steps
 
 ### Immediate Priority
 
-1. **Configure 2nd NICs** (optional but recommended for proper segmentation):
+1. **GPU Transcoding Validation:**
 
-   - infrastructure: Enable ens19 for VLAN 30 (Public - Caddy external access)
-   - media-services: Enable enp6s19 for VLAN 40 (Downloads - qBittorrent)
+   - Test 4K video transcoding in Jellyfin UI
+   - Monitor GPU usage: `cat /sys/class/drm/card0/device/gpu_busy_percent`
+   - Verify VA-API working with AMD 780M iGPU
 
-2. **Create Docker Compose files:**
+2. **Mac Storage Setup:**
 
-   - `ansible/docker-compose/media-stack.yml` (Jellyfin, *arr stack, qBittorrent)
-   - `ansible/docker-compose/caddy.yml` (reverse proxy)
+   - Configure NFS export: `zfs set sharenfs="rw=@192.168.0.0/24,no_root_squash" tank-vms/mac-workspace`
+   - Mount NFS share on Mac over 10GbE
+   - Benchmark performance (target: 400-800 MB/s)
 
-3. **Update/create Ansible playbooks:**
+3. **Cloudflare Tunnel Setup:**
 
-   - `ansible/playbooks/deploy-containers.yml` (install Docker, deploy compose files)
-   - Configure GPU passthrough for Jellyfin container
-
-4. **Deploy services:**
-
-   - Run Ansible playbook to deploy containers
-   - Configure services (Jellyfin, *arr stack, etc.)
-   - Setup Caddy reverse proxy
-
-5. **NFS setup for Mac:**
-
-   - Configure NFS exports on Proxmox
-   - Mount NFS shares on Mac
-   - Test performance
+   - Create infrastructure LXC 101 (192.168.10.222, VLAN 10)
+   - Deploy cloudflared via Docker Compose
+   - Create tunnel in Cloudflare dashboard
+   - Configure routes (jellyfin.yourdomain.com → http://192.168.20.191:8096)
+   - Test external HTTPS access (no port forwarding needed)
 
 ### Nice to Have
 
-- Configure secondary NICs via cloud-init or Ansible
-- Setup monitoring (Grafana, Prometheus)
-- Configure automated backups
+- Setup monitoring (Dozzle for logs, Grafana/Prometheus)
+- Configure automated ZFS snapshots (sanoid/syncoid)
 - Setup Renovate for container updates
+- Document network layout, GPU config, backup procedures
 
 ## Mac Storage Configuration
 
@@ -643,45 +617,62 @@
 
 ## Service Configuration
 
-### [ ] Configure Jellyfin
-- [ ] Access web UI: http://media-services:8096
-- [ ] Complete setup wizard
-- [ ] Dashboard → Playback → Enable VA-API
-- [ ] Add media libraries:
+### [x] Configure Jellyfin
+- [x] Access web UI: http://192.168.20.191:8096
+- [x] Complete setup wizard
+- [x] Dashboard → Playback → Enable VA-API
+- [x] Add media libraries:
   - Movies: /data/media/movies
   - TV: /data/media/tv
   - Music: /data/media/music
-- [ ] Network → Known Proxies: Add Caddy IP
+- [ ] Network → Known Proxies: Add Cloudflare IPs (pending tunnel deployment)
 
-### [ ] Configure Prowlarr
-- [ ] Access web UI: http://media-services:9696
-- [ ] Settings → Indexers → Add indexers
-- [ ] Settings → Apps → Add Sonarr (get API key from sops)
-- [ ] Settings → Apps → Add Radarr (get API key from sops)
-- [ ] Test sync
+### [x] Configure Prowlarr
+- [x] Access web UI: http://192.168.20.192:9696
+- [x] Settings → Indexers → Add indexers
+- [x] Settings → Apps → Add Sonarr
+- [x] Settings → Apps → Add Radarr
+- [x] Test sync
 
-### [ ] Configure Sonarr
-- [ ] Access web UI: http://media-services:8989
-- [ ] Settings → Download Clients → Add qBittorrent
-- [ ] Settings → Media Management → Root folder: /data/media/tv
-- [ ] Settings → Profiles → Configure quality profiles
+### [x] Configure Sonarr
+- [x] Access web UI: http://192.168.20.192:8989
+- [x] Settings → Download Clients → Add qBittorrent
+- [x] Settings → Media Management → Root folder: /data/media/tv
+- [x] Settings → Profiles → Configure quality profiles
 
-### [ ] Configure Radarr
-- [ ] Access web UI: http://media-services:7878
-- [ ] Settings → Download Clients → Add qBittorrent
-- [ ] Settings → Media Management → Root folder: /data/media/movies
-- [ ] Settings → Profiles → Configure quality profiles
+### [x] Configure Radarr
+- [x] Access web UI: http://192.168.20.192:7878
+- [x] Settings → Download Clients → Add qBittorrent
+- [x] Settings → Media Management → Root folder: /data/media/movies
+- [x] Settings → Profiles → Configure quality profiles
 
-### [ ] Configure qBittorrent
-- [ ] Access web UI: http://media-services:8080
-- [ ] Settings → Downloads → Default Save Path: /data/downloads/complete
-- [ ] Settings → Downloads → Temp Path: /data/downloads/incomplete
+### [x] Configure qBittorrent
+- [x] Access web UI: http://192.168.40.162:8080
+- [x] Settings → Downloads → Default Save Path: /data/downloads/complete
+- [x] Settings → Downloads → Temp Path: /data/downloads/incomplete
 
-### [ ] Configure Caddy
-- [ ] Update domain in `nixos/hosts/infrastructure/caddy.nix`
-- [ ] Point DNS to Proxmox public IP
-- [ ] Deploy: `nixos-rebuild switch --flake .#infrastructure`
-- [ ] Verify Let's Encrypt cert: `curl -I https://jellyfin.yourdomain.com`
+### [ ] Configure Cloudflare Tunnel
+- [ ] Create infrastructure LXC 101:
+  ```bash
+  ansible-playbook -i ansible/inventory.yml playbooks/setup-infrastructure-lxc.yml
+  ```
+- [ ] Authenticate cloudflared (one-time): `cloudflared tunnel login`
+- [ ] Create tunnel: `cloudflared tunnel create home-nas`
+- [ ] Save tunnel credentials to `ansible/secrets/secrets.yaml` (sops-encrypted)
+- [ ] Create `ansible/docker-compose/infrastructure-stack.yml`:
+  ```yaml
+  services:
+    cloudflared:
+      image: cloudflare/cloudflared:latest
+      command: tunnel run
+      environment:
+        TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+      restart: unless-stopped
+  ```
+- [ ] Or use config file approach with ingress rules
+- [ ] Add DNS record in Cloudflare dashboard (CNAME to tunnel)
+- [ ] Deploy: `ansible-playbook -i ansible/inventory.yml playbooks/deploy-infrastructure.yml`
+- [ ] Test access: `curl -I https://jellyfin.yourdomain.com`
 
 ## Validation
 
@@ -721,29 +712,24 @@
   ```
 - [ ] Verify OCuLink stability: leave GPU under load, monitor `dmesg` for PCIe errors
 
-### [ ] Test Arr Workflow
-- [ ] Access Jellyseerr (if configured) or directly request in Sonarr
-- [ ] Request TV show
-- [ ] Verify Prowlarr search
-- [ ] Verify Sonarr grabs release
-- [ ] Verify qBittorrent downloads
-- [ ] Verify file moves to /data/media/tv
-- [ ] Verify Jellyfin detects new episode
+### [x] Test Arr Workflow
+- [x] Access Jellyseerr (if configured) or directly request in Sonarr
+- [x] Request TV show
+- [x] Verify Prowlarr search
+- [x] Verify Sonarr grabs release
+- [x] Verify qBittorrent downloads
+- [x] Verify file moves to /data/media/tv
+- [x] Verify Jellyfin detects new episode
 
-### [ ] Test Hardlinks
-- [ ] Wait for download to complete
-- [ ] Check inodes:
-  ```bash
-  ssh root@media-services
-  ls -li /data/downloads/complete/file.mkv
-  ls -li /data/media/tv/Show/file.mkv
-  ```
-- [ ] Verify same inode number (hardlink success)
+### [x] Test Hardlinks
+- [x] Wait for download to complete
+- [x] Check inodes: verified same inode between downloads and media
+- [x] Verify same inode number (hardlink success)
 
 ### [ ] Test External Access
 - [ ] Access https://jellyfin.yourdomain.com from external network
 - [ ] Test playback
-- [ ] Verify HTTPS certificate valid
+- [ ] Verify HTTPS certificate (Cloudflare-managed)
 
 ### [ ] Test Backups
 - [ ] Verify ZFS snapshots: `zfs list -t snapshot`
@@ -815,7 +801,7 @@
 - [ ] Review and merge Renovate PRs
 - [ ] Check backup retention
 - [ ] Review storage usage
-- [ ] Update NixOS VMs: `nixos-rebuild switch`
+- [ ] Update LXC containers: `pct update` or rebuild from Ansible
 
 ### Quarterly
 - [ ] Test disaster recovery procedures

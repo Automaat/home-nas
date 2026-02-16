@@ -11,11 +11,7 @@ all:
     vms:
       children:
         infrastructure_vms:
-          hosts:
-            infrastructure:
-              ansible_host: 192.168.10.222
-              ansible_user: root
-              ansible_python_interpreter: /usr/bin/python3
+          hosts: {}  # Empty, VM decommissioned
 
         custom_workloads:
           hosts:
@@ -26,6 +22,15 @@ all:
 
     lxc_containers:
       children:
+        infrastructure_lxc:
+          hosts:
+            infrastructure:
+              ansible_host: 192.168.10.222
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 101
+              # LXC for Traefik + Cloudflare Tunnel (dual NIC: VLAN 10+20)
+
         jellyfin_lxc:
           hosts:
             jellyfin:
@@ -38,7 +43,7 @@ all:
         media_management_lxc:
           hosts:
             media-management:
-              ansible_host: TBD  # Will get DHCP address after creation
+              ansible_host: 192.168.20.192
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
               ct_id: 111
@@ -47,7 +52,7 @@ all:
         downloads_lxc:
           hosts:
             downloads:
-              ansible_host: TBD  # Will get DHCP address after creation
+              ansible_host: 192.168.40.162
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
               ct_id: 112

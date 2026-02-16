@@ -1,0 +1,62 @@
+http:
+  routers:
+    jellyfin:
+      rule: "Host(`jellyfin.mskalski.dev`)"
+      service: jellyfin
+      entryPoints: [web]
+
+    jellyseerr:
+      rule: "Host(`jellyseerr.mskalski.dev`)"
+      service: jellyseerr
+      entryPoints: [web]
+
+    sonarr:
+      rule: "Host(`sonarr.mskalski.dev`)"
+      service: sonarr
+      entryPoints: [web]
+      middlewares: [internal-whitelist]
+
+    radarr:
+      rule: "Host(`radarr.mskalski.dev`)"
+      service: radarr
+      entryPoints: [web]
+      middlewares: [internal-whitelist]
+
+    prowlarr:
+      rule: "Host(`prowlarr.mskalski.dev`)"
+      service: prowlarr
+      entryPoints: [web]
+      middlewares: [internal-whitelist]
+
+  services:
+    jellyfin:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.191:8096"
+
+    jellyseerr:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.191:5055"
+
+    sonarr:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.192:8989"
+
+    radarr:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.192:7878"
+
+    prowlarr:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.192:9696"
+
+  middlewares:
+    internal-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "192.168.0.0/16"
+          - "172.16.0.0/12"  # Cloudflare Tunnel connector

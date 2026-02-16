@@ -20,45 +20,7 @@ provider "proxmox" {
   password = var.proxmox_password
 }
 
-# Infrastructure VM
-resource "proxmox_virtual_environment_vm" "infrastructure" {
-  name      = "infrastructure"
-  node_name = var.proxmox_node
-  on_boot   = true
-  vm_id     = 101
-
-  cpu {
-    cores = var.infrastructure_cores
-  }
-
-  memory {
-    dedicated = var.infrastructure_memory
-  }
-
-  agent {
-    enabled = true
-  }
-
-  # Management network (VLAN 10)
-  network_device {
-    bridge  = "vmbr0"
-    model   = "virtio"
-    vlan_id = 10
-  }
-
-  # Public network (VLAN 30 - Caddy external access)
-  network_device {
-    bridge  = "vmbr0"
-    model   = "virtio"
-    vlan_id = 30
-  }
-
-  disk {
-    datastore_id = "tank-vms"
-    interface    = "scsi0"
-    size         = 16
-  }
-}
+# Infrastructure VM removed (migrated to LXC 101)
 
 # Custom Workloads VM
 resource "proxmox_virtual_environment_vm" "custom_workloads" {
