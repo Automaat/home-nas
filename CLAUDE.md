@@ -404,14 +404,23 @@ resource "proxmox_virtual_environment_vm" "example_vm" {
 
 - `tank-vms` (NVMe): VM disks
 - `tank-media` (RAIDZ1): Media storage
+  - Shared to media-services VM via VirtioFS (not NFS)
+  - Single dataset (no child datasets) to support hardlinks
 
 **VMs:**
 
-- `media-services` (192.168.20.247): Ubuntu, Jellyfin stack (VLAN 20, 40)
+- `media-services` (192.168.20.191): Ubuntu, Jellyfin stack (VLAN 20, 40)
+  - VirtioFS mount: `/tank-media/data` → `/data` (supports hardlinks)
 - `infrastructure` (192.168.10.222): Ubuntu, Caddy reverse proxy (VLAN 10, 30)
 - `custom-workloads` (192.168.20.106): Ubuntu, Docker containers (VLAN 20)
 
 **GPU Passthrough:** AMD 780M iGPU → media-services VM
+
+**VM Storage Sharing:**
+
+- **VirtioFS** (9p) for KVM VMs - supports hardlinks, required for Sonarr/Radarr
+- **NOT NFS** - NFS breaks hardlinks across mounts
+- **Single ZFS dataset** - child datasets create filesystem boundaries breaking hardlinks
 
 ## Extensibility
 
