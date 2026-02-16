@@ -1,0 +1,169 @@
+---
+- name: Create media-services LXC container with GPU passthrough
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 110
+    ct_hostname: media-services-lxc
+    ct_memory: 16384
+    ct_cores: 6
+    ct_storage: tank-vms
+    ct_rootfs_size: 64
+    template: ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+
+  tasks:
+    - name: Configure subordinate GID ranges for GPU access
+      ansible.builtin.shell:
+        cmd: |
+          ssh root@{{ proxmox_host }} "grep -q '^root:44:1' /etc/subgid || echo 'root:44:1' >> /etc/subgid"
+          ssh root@{{ proxmox_host }} "grep -q '^root:993:1' /etc/subgid || echo 'root:993:1' >> /etc/subgid"
+      changed_when: true
+    - name: Create LXC container
+      ansible.builtin.command:
+        cmd: >
+          ssh root@{{ proxmox_host }} pct create {{ ct_id }}
+          local:vztmpl/{{ template }}
+          --hostname {{ ct_hostname }}
+          --memory {{ ct_memory }}
+          --cores {{ ct_cores }}
+          --storage {{ ct_storage }}
+          --rootfs {{ ct_storage }}:{{ ct_rootfs_size }}
+          --net0 name=eth0,bridge=vmbr0,tag=20,ip=dhcp
+          --net1 name=eth1,bridge=vmbr0,tag=40,ip=dhcp
+          --unprivileged 1
+          --features nesting=1
+          --onboot 1
+      register: create_result
+      failed_when:
+        - create_result.rc != 0
+        - "'already exists' not in create_result.stderr"
+      changed_when: create_result.rc == 0
+
+    - name: Configure GPU devices and ID mapping
+      ansible.builtin.shell:
+        cmd: |
+          ssh root@{{ proxmox_host }} "cat >> /etc/pve/lxc/{{ ct_id }}.conf << 'EOF'
+          # GPU devices
+          lxc.cgroup2.devices.allow: c 226:0 rwm
+          lxc.cgroup2.devices.allow: c 226:128 rwm
+          lxc.mount.entry: /dev/dri/card0 dev/dri/card0 none bind,optional,create=file 0 0
+          lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file 0 0
+
+          # ID mapping for GPU access (video=44, render=993)
+          lxc.idmap: u 0 100000 65536
+          lxc.idmap: g 0 100000 44
+          lxc.idmap: g 44 44 1
+          lxc.idmap: g 45 100045 948
+          lxc.idmap: g 993 993 1
+          lxc.idmap: g 994 100994 64542
+          EOF"
+      changed_when: true
+
+    - name: Start container to create filesystem
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      register: start_result
+      failed_when:
+        - start_result.rc != 0
+        - "'already running' not in start_result.stderr"
+      changed_when: start_result.rc == 0
+
+    - name: Wait for container to be ready
+      ansible.builtin.wait_for:
+        timeout: 15
+      delegate_to: localhost
+
+    - name: Create /data mount point in container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- mkdir -p /data
+      changed_when: true
+
+    - name: Stop container to add storage mount
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct stop {{ ct_id }}
+      changed_when: true
+
+    - name: Add media storage bind mount
+      ansible.builtin.command:
+        cmd: "ssh root@{{ proxmox_host }} \"echo 'lxc.mount.entry: /tank-media/data data none bind 0 0' >> /etc/pve/lxc/{{ ct_id }}.conf\""
+      changed_when: true
+
+    - name: Start container with all mounts
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      changed_when: true
+
+    - name: Wait for container networking
+      ansible.builtin.wait_for:
+        timeout: 20
+      delegate_to: localhost
+
+- name: Configure container OS and GPU drivers
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 110
+
+  tasks:
+    - name: Update package cache
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- apt-get update
+      changed_when: true
+
+    - name: Install GPU and media packages
+      ansible.builtin.command:
+        cmd: >
+          ssh root@{{ proxmox_host }} pct exec {{ ct_id }} --
+          apt-get install -y
+          mesa-va-drivers mesa-vulkan-drivers
+          vainfo
+          curl
+      changed_when: true
+
+    - name: Create video and render groups
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- groupadd -f -g 44 video
+      changed_when: true
+
+    - name: Create render group
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- groupadd -f -g 993 render
+      changed_when: true
+
+    - name: Add root to video and render groups
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- usermod -aG video,render root
+      changed_when: true
+
+    - name: Verify GPU devices
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- ls -la /dev/dri/
+      register: dri_check
+      changed_when: false
+
+    - name: Display GPU status
+      ansible.builtin.debug:
+        var: dri_check.stdout_lines
+
+    - name: Verify storage mount
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- ls -ld /data
+      register: storage_check
+      changed_when: false
+
+    - name: Display storage status
+      ansible.builtin.debug:
+        var: storage_check.stdout_lines
+
+    - name: Test VAAPI
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- vainfo
+      register: vainfo_result
+      changed_when: false
+      failed_when: false
+
+    - name: Display VAAPI status
+      ansible.builtin.debug:
+        msg: "{{ vainfo_result.stdout_lines }}"

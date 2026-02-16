@@ -31,3 +31,32 @@ all:
               ansible_host: 192.168.20.106
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
+
+    lxc_containers:
+      children:
+        jellyfin_lxc:
+          hosts:
+            jellyfin:
+              ansible_host: 192.168.20.191  # Will get DHCP address after creation
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 110
+              # LXC with GPU access (card0, renderD128)
+
+        media_management_lxc:
+          hosts:
+            media-management:
+              ansible_host: TBD  # Will get DHCP address after creation
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 111
+              # LXC for *arr stack (Sonarr, Radarr, etc.)
+
+        downloads_lxc:
+          hosts:
+            downloads:
+              ansible_host: TBD  # Will get DHCP address after creation
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 112
+              # LXC for qBittorrent + Gluetun VPN

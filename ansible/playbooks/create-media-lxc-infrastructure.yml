@@ -1,0 +1,151 @@
+---
+# Create all 3 LXC containers for separated media stack
+- name: Setup Proxmox host for LXC GPU sharing
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+
+  tasks:
+    - name: Configure subordinate GID ranges for GPU access
+      ansible.builtin.shell:
+        cmd: |
+          ssh root@{{ proxmox_host }} "grep -q '^root:44:1' /etc/subgid || echo 'root:44:1' >> /etc/subgid"
+          ssh root@{{ proxmox_host }} "grep -q '^root:993:1' /etc/subgid || echo 'root:993:1' >> /etc/subgid"
+      changed_when: true
+
+- name: Create media-management LXC container
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 111
+    ct_hostname: media-management
+    ct_memory: 8192
+    ct_cores: 4
+    ct_storage: tank-vms
+    ct_rootfs_size: 32
+    template: ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+
+  tasks:
+    - name: Create LXC container
+      ansible.builtin.command:
+        cmd: >
+          ssh root@{{ proxmox_host }} pct create {{ ct_id }}
+          local:vztmpl/{{ template }}
+          --hostname {{ ct_hostname }}
+          --memory {{ ct_memory }}
+          --cores {{ ct_cores }}
+          --storage {{ ct_storage }}
+          --rootfs {{ ct_storage }}:{{ ct_rootfs_size }}
+          --net0 name=eth0,bridge=vmbr0,tag=20,ip=dhcp
+          --unprivileged 1
+          --features nesting=1
+          --onboot 1
+      register: create_result
+      failed_when:
+        - create_result.rc != 0
+        - "'already exists' not in create_result.stderr"
+      changed_when: create_result.rc == 0
+
+    - name: Start container to create filesystem
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      register: start_result
+      failed_when:
+        - start_result.rc != 0
+        - "'already running' not in start_result.stderr"
+      changed_when: start_result.rc == 0
+
+    - name: Wait for container
+      ansible.builtin.wait_for:
+        timeout: 15
+      delegate_to: localhost
+
+    - name: Create /data mount point
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- mkdir -p /data
+      changed_when: true
+
+    - name: Stop container to add mounts
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct stop {{ ct_id }}
+      changed_when: true
+
+    - name: Add storage bind mount
+      ansible.builtin.command:
+        cmd: "ssh root@{{ proxmox_host }} \"echo 'lxc.mount.entry: /tank-media/data data none bind 0 0' >> /etc/pve/lxc/{{ ct_id }}.conf\""
+      changed_when: true
+
+    - name: Start container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      changed_when: true
+
+- name: Create downloads LXC container
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 112
+    ct_hostname: downloads
+    ct_memory: 4096
+    ct_cores: 2
+    ct_storage: tank-vms
+    ct_rootfs_size: 16
+    template: ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+
+  tasks:
+    - name: Create LXC container
+      ansible.builtin.command:
+        cmd: >
+          ssh root@{{ proxmox_host }} pct create {{ ct_id }}
+          local:vztmpl/{{ template }}
+          --hostname {{ ct_hostname }}
+          --memory {{ ct_memory }}
+          --cores {{ ct_cores }}
+          --storage {{ ct_storage }}
+          --rootfs {{ ct_storage }}:{{ ct_rootfs_size }}
+          --net0 name=eth0,bridge=vmbr0,tag=40,ip=dhcp
+          --unprivileged 1
+          --features nesting=1
+          --onboot 1
+      register: create_result
+      failed_when:
+        - create_result.rc != 0
+        - "'already exists' not in create_result.stderr"
+      changed_when: create_result.rc == 0
+
+    - name: Start container to create filesystem
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      register: start_result
+      failed_when:
+        - start_result.rc != 0
+        - "'already running' not in start_result.stderr"
+      changed_when: start_result.rc == 0
+
+    - name: Wait for container
+      ansible.builtin.wait_for:
+        timeout: 15
+      delegate_to: localhost
+
+    - name: Create /data mount point
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- mkdir -p /data
+      changed_when: true
+
+    - name: Stop container to add mounts
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct stop {{ ct_id }}
+      changed_when: true
+
+    - name: Add storage bind mount
+      ansible.builtin.command:
+        cmd: "ssh root@{{ proxmox_host }} \"echo 'lxc.mount.entry: /tank-media/data data none bind 0 0' >> /etc/pve/lxc/{{ ct_id }}.conf\""
+      changed_when: true
+
+    - name: Start container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      changed_when: true
