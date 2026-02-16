@@ -65,7 +65,7 @@
 
     - name: Wait for VM to be ready
       ansible.builtin.wait_for:
-        host: 192.168.20.191
+        host: "{{ hostvars['media-services']['ansible_host'] }}"
         port: 22
         delay: 15
         timeout: 120

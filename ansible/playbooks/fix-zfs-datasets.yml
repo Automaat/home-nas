@@ -7,6 +7,7 @@
     parent_dataset: tank-media/data
     parent_mount: /tank-media/data
     backup_dir: /tank-media/backup-datasets
+    vm_id: 100
 
   tasks:
     - name: Create backup directory
@@ -15,14 +16,21 @@
         state: directory
         mode: '0755'
 
-    - name: Stop media-services VM
+    - name: Shutdown media-services VM gracefully
       ansible.builtin.command:
-        cmd: qm stop 100
+        cmd: qm shutdown {{ vm_id }}
       changed_when: true
 
     - name: Wait for VM to stop
-      ansible.builtin.pause:
-        seconds: 10
+      ansible.builtin.shell:
+        cmd: "set -o pipefail && qm status {{ vm_id }} | grep -q 'status: stopped'"
+      args:
+        executable: /bin/bash
+      register: vm_shutdown_check
+      retries: 30
+      delay: 10
+      until: vm_shutdown_check.rc == 0
+      changed_when: false
 
     - name: Check if snapshot exists
       ansible.builtin.shell:
@@ -35,7 +43,7 @@
 
     - name: Snapshot child datasets before migration
       ansible.builtin.command:
-        cmd: zfs snapshot -r {{ parent_dataset }}@pre-consolidation-{{ ansible_date_time.epoch }}
+        cmd: zfs snapshot -r {{ parent_dataset }}@pre-consolidation
       when: snapshot_exists.rc != 0
       changed_when: true
       register: new_snapshot
@@ -113,6 +121,15 @@
         executable: /bin/bash
       changed_when: true
 
+    - name: Verify datasets unmounted
+      ansible.builtin.shell:
+        cmd: set -o pipefail && mount | grep -q "{{ parent_mount }}"
+      args:
+        executable: /bin/bash
+      register: still_mounted
+      failed_when: still_mounted.rc == 0
+      changed_when: false
+
     - name: Remove mount point directories
       ansible.builtin.file:
         path: "{{ parent_mount }}/{{ item }}"
@@ -179,12 +196,12 @@
 
     - name: Start media-services VM
       ansible.builtin.command:
-        cmd: qm start 100
+        cmd: qm start {{ vm_id }}
       changed_when: true
 
     - name: Wait for VM to be ready
       ansible.builtin.wait_for:
-        host: 192.168.20.191
+        host: "{{ hostvars['media-services']['ansible_host'] }}"
         port: 22
         delay: 15
         timeout: 120
