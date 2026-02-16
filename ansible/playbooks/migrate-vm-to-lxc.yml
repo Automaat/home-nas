@@ -10,7 +10,7 @@
       community.docker.docker_compose_v2:
         project_src: /opt/media-stack
         state: stopped
-      ignore_errors: true
+      failed_when: false
 
 - name: Create LXC infrastructure
   ansible.builtin.import_playbook: create-media-lxc-infrastructure.yml
@@ -117,7 +117,9 @@
 
     - name: Write .env file to Proxmox
       ansible.builtin.shell:
-        cmd: echo "WIREGUARD_PRIVATE_KEY={{ wg_key_result.stdout }}" | ssh root@{{ proxmox_host }} "cat > /tmp/downloads.env"
+        cmd: |
+          set -o pipefail
+          echo "WIREGUARD_PRIVATE_KEY={{ wg_key_result.stdout }}" | ssh root@{{ proxmox_host }} "cat > /tmp/downloads.env"
       no_log: true
       changed_when: true
 
