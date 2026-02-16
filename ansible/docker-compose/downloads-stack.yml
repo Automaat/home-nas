@@ -19,7 +19,6 @@ services:
       - VPN_PORT_FORWARDING=on
       - VPN_PORT_FORWARDING_PROVIDER=protonvpn
       - VPN_PORT_FORWARDING_STATUS_FILE=/gluetun/forwarded_port
-      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'for i in 1 2 3 4 5; do wget -qO- --post-data "json={\"listen_port\":$${PORTS}}" http://localhost:8080/api/v2/app/setPreferences && break || sleep 5; done'
       - FIREWALL_OUTBOUND_SUBNETS=192.168.20.0/24,192.168.40.0/24
       - DOT=off
       - DNS_ADDRESS=1.1.1.1
@@ -49,5 +48,17 @@ services:
     depends_on:
       gluetun:
         condition: service_healthy
+    restart: unless-stopped
+
+  port-monitor:
+    image: alpine:latest
+    container_name: port-monitor
+    network_mode: container:gluetun
+    command: sh /scripts/port-monitor.sh
+    volumes:
+      - /opt/scripts:/scripts:ro
+      - /data/gluetun:/gluetun:ro
+    depends_on:
+      - qbittorrent
     restart: unless-stopped
 
