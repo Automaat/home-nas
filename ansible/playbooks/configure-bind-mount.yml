@@ -30,7 +30,9 @@
   tasks:
     - name: Check if VirtioFS already configured
       ansible.builtin.shell:
-        cmd: qm config {{ vm_id }} | grep -q "^args:.*virtfs"
+        cmd: set -o pipefail && qm config {{ vm_id }} | grep -q "^args:.*virtfs"
+      args:
+        executable: /bin/bash
       register: virtfs_exists
       failed_when: false
       changed_when: false
@@ -71,7 +73,9 @@
 
     - name: Verify VirtioFS configuration
       ansible.builtin.shell:
-        cmd: qm config {{ vm_id }} | grep "^args:"
+        cmd: set -o pipefail && qm config {{ vm_id }} | grep "^args:"
+      args:
+        executable: /bin/bash
       register: vm_config
       changed_when: false
 
@@ -113,15 +117,18 @@
         daemon_reload: true
 
     - name: Mount VirtioFS
-      ansible.builtin.command:
-        cmd: mount -t 9p -o trans=virtio,version=9p2000.L,msize=104857600 {{ mount_tag }} {{ mount_point }}
-      register: mount_result
-      changed_when: mount_result.rc == 0
-      failed_when: mount_result.rc != 0
+      ansible.posix.mount:
+        path: "{{ mount_point }}"
+        src: "{{ mount_tag }}"
+        fstype: 9p
+        opts: trans=virtio,version=9p2000.L,msize=104857600
+        state: mounted
 
     - name: Verify mount
       ansible.builtin.shell:
-        cmd: mount | grep "{{ mount_point }}"
+        cmd: set -o pipefail && mount | grep "{{ mount_point }}"
+      args:
+        executable: /bin/bash
       register: verify_mount
       changed_when: false
 
@@ -149,6 +156,7 @@
             src: "{{ mount_point }}/downloads/hardlink-test"
             dest: "{{ mount_point }}/media/hardlink-test"
             state: hard
+            mode: '0644'
 
         - name: Get inodes
           ansible.builtin.stat:

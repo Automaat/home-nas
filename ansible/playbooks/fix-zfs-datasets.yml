@@ -26,7 +26,9 @@
 
     - name: Check if snapshot exists
       ansible.builtin.shell:
-        cmd: zfs list -t snapshot | grep -q "@pre-consolidation"
+        cmd: set -o pipefail && zfs list -t snapshot | grep -q "@pre-consolidation"
+      args:
+        executable: /bin/bash
       register: snapshot_exists
       failed_when: false
       changed_when: false
@@ -46,7 +48,9 @@
 
     - name: List child datasets
       ansible.builtin.shell:
-        cmd: zfs list -H -o name -r {{ parent_dataset }} | grep -v "^{{ parent_dataset }}$" | tac
+        cmd: set -o pipefail && zfs list -H -o name -r {{ parent_dataset }} | grep -v "^{{ parent_dataset }}$" | tac
+      args:
+        executable: /bin/bash
       register: child_datasets
       changed_when: false
 
@@ -73,13 +77,15 @@
         - "{{ backup_dir }}/media-backup.zfs"
 
     - name: Copy data to temporary location before destroying datasets
-      ansible.builtin.shell:
-        cmd: |
-          rsync -avH {{ parent_mount }}/downloads/ {{ backup_dir }}/downloads-data/
-          rsync -avH {{ parent_mount }}/media/ {{ backup_dir }}/media-data/
-      args:
-        executable: /bin/bash
-      changed_when: true
+      ansible.posix.synchronize:
+        src: "{{ parent_mount }}/{{ item.src }}/"
+        dest: "{{ backup_dir }}/{{ item.dest }}/"
+        archive: true
+        links: true
+      delegate_to: "{{ inventory_hostname }}"
+      loop:
+        - {src: downloads, dest: downloads-data}
+        - {src: media, dest: media-data}
 
     - name: Verify backup data
       ansible.builtin.shell:
@@ -139,13 +145,15 @@
         - media/tv
 
     - name: Restore data from backup
-      ansible.builtin.shell:
-        cmd: |
-          rsync -avH {{ backup_dir }}/downloads-data/ {{ parent_mount }}/downloads/
-          rsync -avH {{ backup_dir }}/media-data/ {{ parent_mount }}/media/
-      args:
-        executable: /bin/bash
-      changed_when: true
+      ansible.posix.synchronize:
+        src: "{{ backup_dir }}/{{ item.src }}/"
+        dest: "{{ parent_mount }}/{{ item.dest }}/"
+        archive: true
+        links: true
+      delegate_to: "{{ inventory_hostname }}"
+      loop:
+        - {src: downloads-data, dest: downloads}
+        - {src: media-data, dest: media}
 
     - name: Verify data restored correctly
       ansible.builtin.shell:
@@ -160,7 +168,7 @@
         msg: "{{ restored_data.stdout_lines }}"
 
     - name: Verify single filesystem
-      ansible.builtin.shell:
+      ansible.builtin.command:
         cmd: zfs list -r {{ parent_dataset }}
       register: final_datasets
       changed_when: false
@@ -191,7 +199,9 @@
   tasks:
     - name: Verify mount is active
       ansible.builtin.shell:
-        cmd: mount | grep "{{ mount_point }}"
+        cmd: set -o pipefail && mount | grep "{{ mount_point }}"
+      args:
+        executable: /bin/bash
       register: verify_mount
       changed_when: false
 
@@ -212,6 +222,7 @@
             src: "{{ mount_point }}/downloads/hardlink-test"
             dest: "{{ mount_point }}/media/hardlink-test"
             state: hard
+            mode: '0644'
 
         - name: Get inodes
           ansible.builtin.stat:
