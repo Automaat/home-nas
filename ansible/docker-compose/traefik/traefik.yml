@@ -1,0 +1,23 @@
+---
+api:
+  dashboard: true
+  insecure: true  # Dashboard on :8080 (internal only)
+
+entryPoints:
+  web:
+    address: ":80"
+
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    filename: /etc/traefik/services.yml
+    watch: true
+
+log:
+  level: INFO
+
+accessLog:
+  filePath: /var/log/traefik/access.log
+  bufferingSize: 100

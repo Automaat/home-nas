@@ -10,20 +10,8 @@ all:
 
     vms:
       children:
-        media_services:
-          hosts:
-            media-services:
-              ansible_host: 192.168.20.191
-              ansible_user: root
-              ansible_python_interpreter: /usr/bin/python3
-              # VM 100 with AMD 780M GPU passthrough (UEFI + cloud-init)
-
         infrastructure_vms:
-          hosts:
-            infrastructure:
-              ansible_host: 192.168.10.222
-              ansible_user: root
-              ansible_python_interpreter: /usr/bin/python3
+          hosts: {}  # Empty, VM decommissioned
 
         custom_workloads:
           hosts:
@@ -31,3 +19,41 @@ all:
               ansible_host: 192.168.20.106
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
+
+    lxc_containers:
+      children:
+        infrastructure_lxc:
+          hosts:
+            infrastructure:
+              ansible_host: 192.168.10.222
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 101
+              # LXC for Traefik + Cloudflare Tunnel (dual NIC: VLAN 10+20)
+
+        jellyfin_lxc:
+          hosts:
+            jellyfin:
+              ansible_host: 192.168.20.191  # Will get DHCP address after creation
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 110
+              # LXC with GPU access (card0, renderD128)
+
+        media_management_lxc:
+          hosts:
+            media-management:
+              ansible_host: 192.168.20.192
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 111
+              # LXC for *arr stack (Sonarr, Radarr, etc.)
+
+        downloads_lxc:
+          hosts:
+            downloads:
+              ansible_host: 192.168.40.162
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 112
+              # LXC for qBittorrent + Gluetun VPN

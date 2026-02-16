@@ -1,0 +1,183 @@
+---
+# Complete migration from media-services VM to 3 LXC containers
+# Preserves all existing configuration
+
+- name: Stop services on source VM
+  hosts: media-services
+  become: true
+  tasks:
+    - name: Stop all Docker containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/media-stack
+        state: stopped
+      failed_when: false
+
+- name: Create LXC infrastructure
+  ansible.builtin.import_playbook: create-media-lxc-infrastructure.yml
+
+- name: Configure jellyfin LXC (110)
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 110
+    vm_host: 192.168.20.191
+
+  tasks:
+    - name: Update apt cache in container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- apt-get update
+      changed_when: true
+
+    - name: Install Docker in container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- apt-get install -y docker.io docker-compose-v2
+      changed_when: true
+
+    - name: Create compose directory
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- mkdir -p /opt/jellyfin-stack
+      changed_when: true
+
+    - name: Copy jellyfin compose file to Proxmox
+      ansible.builtin.command:
+        cmd: scp {{ playbook_dir }}/../docker-compose/jellyfin-stack.yml root@{{ proxmox_host }}:/tmp/jellyfin-stack.yml
+      changed_when: true
+
+    - name: Copy compose file into container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} "pct push {{ ct_id }} /tmp/jellyfin-stack.yml /opt/jellyfin-stack/docker-compose.yml"
+      changed_when: true
+
+- name: Configure media-management LXC (111)
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 111
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- apt-get update
+      changed_when: true
+
+    - name: Install Docker
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- apt-get install -y docker.io docker-compose-v2
+      changed_when: true
+
+    - name: Create compose directory
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- mkdir -p /opt/media-management-stack
+      changed_when: true
+
+    - name: Copy compose file to Proxmox
+      ansible.builtin.command:
+        cmd: scp {{ playbook_dir }}/../docker-compose/media-management-stack.yml root@{{ proxmox_host }}:/tmp/media-management-stack.yml
+      changed_when: true
+
+    - name: Copy compose file into container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} "pct push {{ ct_id }} /tmp/media-management-stack.yml /opt/media-management-stack/docker-compose.yml"
+      changed_when: true
+
+- name: Configure downloads LXC (112)
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 112
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- apt-get update
+      changed_when: true
+
+    - name: Install Docker
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- apt-get install -y docker.io docker-compose-v2
+      changed_when: true
+
+    - name: Create compose directory
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- mkdir -p /opt/downloads-stack
+      changed_when: true
+
+    - name: Extract WireGuard private key
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["protonvpn_wg_conf"]' {{ playbook_dir }}/../secrets/secrets.yaml | grep 'PrivateKey' | awk -F' = ' '{print $2}'
+      register: wg_key_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Write .env file to Proxmox
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          echo "WIREGUARD_PRIVATE_KEY={{ wg_key_result.stdout }}" | ssh root@{{ proxmox_host }} "cat > /tmp/downloads.env"
+      no_log: true
+      changed_when: true
+
+    - name: Copy .env into container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} "pct push {{ ct_id }} /tmp/downloads.env /opt/downloads-stack/.env"
+      changed_when: true
+
+    - name: Set .env permissions
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec {{ ct_id }} -- chmod 600 /opt/downloads-stack/.env
+      changed_when: true
+
+    - name: Copy compose file to Proxmox
+      ansible.builtin.command:
+        cmd: scp {{ playbook_dir }}/../docker-compose/downloads-stack.yml root@{{ proxmox_host }}:/tmp/downloads-stack.yml
+      changed_when: true
+
+    - name: Copy compose file into container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} "pct push {{ ct_id }} /tmp/downloads-stack.yml /opt/downloads-stack/docker-compose.yml"
+      changed_when: true
+
+- name: Deploy services
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+
+  tasks:
+    - name: Start jellyfin stack
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec 110 -- docker compose -f /opt/jellyfin-stack/docker-compose.yml up -d
+      changed_when: true
+
+    - name: Start media-management stack
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec 111 -- docker compose -f /opt/media-management-stack/docker-compose.yml up -d
+      changed_when: true
+
+    - name: Start downloads stack
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct exec 112 -- docker compose -f /opt/downloads-stack/docker-compose.yml up -d
+      changed_when: true
+
+    - name: Display migration complete message
+      ansible.builtin.debug:
+        msg:
+          - "Migration complete!"
+          - "Jellyfin LXC (110): Check http://IP:8096"
+          - "Media Management LXC (111): Services on standard ports"
+          - "Downloads LXC (112): qBittorrent on http://IP:8080"
+          - ""
+          - "All services now use shared /data from host via bind mount"
+          - "Configs preserved from VM at /data/<service>/config"
+          - ""
+          - "Next steps:"
+          - "1. Verify all services working"
+          - "2. Test Jellyfin GPU transcoding"
+          - "3. Update DNS/reverse proxy if needed"
+          - "4. Once stable, decommission media-services VM (ID 100)"

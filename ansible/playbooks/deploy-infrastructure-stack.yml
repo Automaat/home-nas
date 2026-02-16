@@ -1,0 +1,82 @@
+---
+- name: Deploy infrastructure stack to infrastructure LXC
+  hosts: infrastructure
+  become: true
+
+  vars:
+    compose_file: /opt/infrastructure/docker-compose.yml
+    env_file: /opt/infrastructure/.env
+
+  tasks:
+    - name: Ensure Docker is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Ensure infrastructure directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/infrastructure
+        - /opt/traefik
+        - /opt/traefik/config
+        - /var/log/traefik
+
+    - name: Copy Traefik static config
+      ansible.builtin.copy:
+        src: ../docker-compose/traefik/traefik.yml
+        dest: /opt/traefik/traefik.yml
+        mode: '0644'
+
+    - name: Copy Traefik dynamic config
+      ansible.builtin.copy:
+        src: ../docker-compose/traefik/services.yml
+        dest: /opt/traefik/config/services.yml
+        mode: '0644'
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/infrastructure-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Extract Cloudflare tunnel token from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["cloudflare_tunnel_token"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: cf_token_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set Cloudflare tunnel token fact
+      ansible.builtin.set_fact:
+        cf_tunnel_token: "{{ cf_token_result.stdout }}"
+      no_log: true
+
+    - name: Create .env file with Cloudflare tunnel token
+      ansible.builtin.copy:
+        content: |
+          CLOUDFLARE_TUNNEL_TOKEN={{ cf_tunnel_token }}
+        dest: "{{ env_file }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Deploy infrastructure stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/infrastructure
+        state: present
+        pull: always
+
+    - name: Verify containers are running
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      register: container_info
+      failed_when: not container_info.exists or container_info.container.State.Status != 'running'
+      loop:
+        - traefik
+        - cloudflared

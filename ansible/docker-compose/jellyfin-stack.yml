@@ -1,0 +1,60 @@
+services:
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:10.11.6
+    container_name: jellyfin
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Amsterdam
+    volumes:
+      - /data/jellyfin/config:/config
+      - /data/media:/data/media
+    ports:
+      - 8096:8096
+      - 8920:8920  # HTTPS
+      - 7359:7359/udp  # Discovery
+      - 1900:1900/udp  # DLNA
+    devices:
+      - /dev/dri:/dev/dri  # GPU for transcoding
+    restart: unless-stopped
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:2.7.3
+    container_name: jellyseerr
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Europe/Amsterdam
+    volumes:
+      - /data/jellyseerr/config:/app/config
+    ports:
+      - 5055:5055
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.16.1
+    container_name: ollama
+    devices:
+      - /dev/dri:/dev/dri  # AMD GPU for inference
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0  # AMD 780M compatibility
+    volumes:
+      - /data/ollama/models:/root/.ollama
+    ports:
+      - 11434:11434
+    restart: unless-stopped
+
+  navidrome:
+    image: deluan/navidrome:0.60.3
+    container_name: navidrome
+    environment:
+      - ND_MUSICFOLDER=/music
+      - ND_LOGLEVEL=info
+      - ND_SCANSCHEDULE=15m
+      - ND_SESSIONTIMEOUT=24h
+    volumes:
+      - /data/navidrome/config:/data
+      - /data/media/music:/music:ro
+    ports:
+      - 4533:4533
+    restart: unless-stopped

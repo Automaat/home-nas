@@ -70,33 +70,12 @@
 - [x] Enable IOMMU in BIOS (AMD-Vi) - already enabled
 - [ ] Verify OCuLink connection (if using eGPU): `lspci | grep -i vga`
 - [x] Check IOMMU groups: `find /sys/kernel/iommu_groups/ -type l | grep -E '(VGA|Display)'`
-- [x] Edit `/etc/default/grub`:
-  ```
-  # Single GPU (iGPU only):
-  GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt video=efifb:off"
+- [x] ~~Edit `/etc/default/grub` for GPU passthrough~~ - NOT NEEDED for LXC approach
+- [x] ~~Create `/etc/modprobe.d/vfio.conf`~~ - NOT NEEDED for LXC approach
+- [x] GPU uses amdgpu driver on host (not vfio-pci)
+- [x] LXC containers access GPU via direct device sharing
 
-  # Dual GPU (iGPU + eGPU, if different IOMMU groups need separation):
-  GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt pcie_acs_override=downstream,multifunction video=efifb:off"
-  ```
-- [x] Get GPU PCI IDs: `lspci -nn | grep -E 'VGA|Display'`
-  - AMD 780M iGPU: `1002:1900` (actual)
-  - eGPU: note actual PCI ID
-- [x] Create `/etc/modprobe.d/vfio.conf`:
-
-  ```
-  # Single GPU (iGPU only):
-  options vfio-pci ids=1002:1900
-  softdep amdgpu pre: vfio-pci
-
-  # Dual GPU (iGPU + eGPU):
-  options vfio-pci ids=1002:1900,10de:XXXX  # Replace 10de:XXXX with actual eGPU ID
-  softdep amdgpu pre: vfio-pci
-  softdep nvidia pre: vfio-pci  # Add if NVIDIA eGPU
-  ```
-
-- [x] Run `update-grub && update-initramfs -u && reboot`
-- [x] Verify IOMMU: `dmesg | grep -i iommu`
-- [x] Verify vfio binding: `lspci -nnk | grep -A 3 -E 'VGA|Display'` (should show `vfio-pci` driver)
+**Note:** Initial VM approach with vfio-pci binding abandoned due to AMD Phoenix 780M PSP firmware incompatibility with Linux VMs. LXC approach uses host's amdgpu driver directly.
 
 ### [x] Create ZFS Pools
 
@@ -221,14 +200,13 @@
 - [x] Initialize git: `git init`
 - [x] Create base structure:
   ```bash
-  mkdir -p terraform nixos/{hosts/{media-services,infrastructure},modules,secrets} \
-           ansible/{playbooks,docker-compose} docs .github/workflows
+  mkdir -p terraform ansible/{playbooks,docker-compose,secrets} docs .github/workflows
   ```
 
 ### [x] Setup Secrets Management
 - [x] Get Proxmox SSH host key: `ssh root@proxmox-ip cat /etc/ssh/ssh_host_ed25519_key.pub`
 - [x] Generate age key: `nix-shell -p ssh-to-age --run 'echo "<pubkey>" | ssh-to-age'`
-- [x] Create `nixos/secrets/.sops.yaml`:
+- [x] Create `ansible/secrets/.sops.yaml`:
   ```yaml
   keys:
     - &admin age1xxx...
@@ -239,87 +217,75 @@
             - *admin
   ```
 
-- [x] Create `nixos/secrets/secrets.yaml` with:
+- [x] Create `ansible/secrets/secrets.yaml` with:
 
   - jellyfin_api_key
   - sonarr_api_key
   - radarr_api_key
   - prowlarr_api_key
   - qbittorrent_password
-- [x] Encrypt: `sops nixos/secrets/secrets.yaml`
+  - cloudflare_tunnel_token
+- [x] Encrypt: `sops ansible/secrets/secrets.yaml`
 
 ## Infrastructure as Code
 
-### [x] Create Flake Configuration
+### [x] Create Media Services Architecture
 
-- [x] Create `flake.nix`:
+**Architecture Evolution:** Migrated from single VM to 3 LXC containers (2026-02-16)
 
-  ```nix
-  {
-    inputs = {
-      nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-      sops-nix.url = "github:Mic92/sops-nix";
-    };
-    outputs = { nixpkgs, sops-nix, ... }: {
-      nixosConfigurations = {
-        media-services = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = [
-            sops-nix.nixosModules.sops
-            ./nixos/common.nix
-            ./nixos/hosts/media-services/configuration.nix
-          ];
-        };
-        infrastructure = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = [
-            sops-nix.nixosModules.sops
-            ./nixos/common.nix
-            ./nixos/hosts/infrastructure/configuration.nix
-          ];
-        };
-      };
-    };
-  }
-  ```
-- [x] Run `nix flake update`
+**Previous:** media-services VM (100) with GPU passthrough via UEFI/OVMF
+**Current:** 3 unprivileged LXC containers with direct GPU device sharing
 
-### [x] Create NixOS Common Config
+**Reason for Change:** AMD Phoenix 780M iGPU PSP firmware incompatible with Linux VM passthrough. LXC provides direct GPU access from host without VM virtualization layer.
 
-- [x] Create `nixos/common.nix`:
-  - Base packages
-  - SSH config (keys from environment-as-code)
-  - Firewall defaults
-  - User accounts
-  - Timezone, locale
+**LXC Containers:**
 
-### [x] Create Media Services VM Config
+- [x] LXC 110 (jellyfin): GPU-enabled services
+  - Static IP: 192.168.20.191 (VLAN 20)
+  - Services: Jellyfin, Jellyseerr, Ollama, Navidrome
+  - GPU: /dev/dri/card0 + /dev/dri/renderD128 (AMD 780M)
+  - Storage: /tank-media/data bind mount (supports hardlinks)
 
-- [x] Using Ubuntu with Docker instead of NixOS (simpler deployment)
-- [x] GPU passthrough configured (AMD 780M iGPU via UEFI/OVMF)
-- [x] Docker Compose stack deployed via Ansible
-- [x] All services using `/data` volumes from tank-media
+- [x] LXC 111 (media-management): *arr stack
+  - Static IP: 192.168.20.192 (VLAN 20)
+  - Services: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Bookshelf, Subgen
+  - Storage: /tank-media/data bind mount (supports hardlinks)
 
-### [x] Create Infrastructure VM Config
-- [ ] Create `nixos/hosts/infrastructure/configuration.nix`
-- [ ] Create `nixos/hosts/infrastructure/caddy.nix`:
-  - Caddy service config
-  - Reverse proxy rules (jellyfin.yourdomain.com)
+- [x] LXC 112 (downloads): VPN + downloads
+  - Static IP: 192.168.40.162 (VLAN 40)
+  - Services: Gluetun (VPN), qBittorrent
+  - Network: Isolated on VLAN 40 for security
+  - Storage: /tank-media/data bind mount (supports hardlinks)
+
+**Key Implementation Details:**
+
+- Unprivileged containers: UID mapping (container 1000 = host 101000)
+- GPU access: Direct device sharing via lxc.mount.entry + lxc.cgroup2.devices.allow
+- Subordinate GID mapping: video (44) and render (993) groups mapped
+- All containers use bind mounts (NOT VirtioFS/NFS) for hardlink support
+
+### [x] Create Infrastructure LXC
+- [ ] Create LXC 101 for infrastructure services
+- [ ] Create `ansible/playbooks/setup-infrastructure-lxc.yml`:
+  - Create unprivileged LXC container
+  - Static IP: 192.168.10.222 (VLAN 10)
+  - Install Docker
+  - Deploy cloudflared container
+- [ ] Create `ansible/docker-compose/infrastructure-stack.yml`:
+  - cloudflared (Cloudflare Tunnel)
+  - Tunnel routes (jellyfin.yourdomain.com → http://192.168.20.191:8096)
   - WebSocket support
-  - Auto-HTTPS
+  - HTTPS handled by Cloudflare (no local certs needed)
 
 ### [x] Create OpenTofu Configuration
 
 - [x] Create `terraform/main.tf`:
   - Proxmox provider config (bpg/proxmox)
-  - 3 VM resources (media-services, infrastructure, custom-workloads)
+  - 1 VM resource (custom-workloads)
+  - ~~infrastructure VM~~ (replaced by LXC 101)
+  - ~~media-services VM~~ (decommissioned - replaced by LXC 110+111+112)
   - VLAN networking (VLANs 10, 20, 30, 40)
-  - GPU passthrough for media-services VM:
-    - BIOS: OVMF (UEFI) for ROM file support
-    - AMD 780M iGPU: 0000:01:00.0 with vbios_8845hs.bin
-    - AMD Audio: 0000:01:00.1 with AMDGopDriver_8845hs.rom
-    - Cloud-init vendor data for automated driver install
-    - kvm_arguments to hide virtualization
+  - All LXC containers managed via Ansible (not Terraform)
 - [x] Create `terraform/storage.tf`:
   - NFS share documentation
   - Ansible playbook reference for configuration
@@ -331,14 +297,17 @@
 
 ### [x] Create Ansible Configuration
 
-**Ansible manages all Proxmox host configuration (repos, GPU passthrough, ZFS, NFS)**
+**Ansible manages all Proxmox host configuration (repos, GPU passthrough, ZFS, NFS) + LXC deployment**
 
 - [x] Create `ansible/inventory.yml`:
-  - Proxmox host + VMs
+  - Proxmox host + VMs + LXC containers
+  - ~~media-services VM~~ (removed)
+  - ~~infrastructure VM~~ (replaced by LXC)
+  - LXC containers: infrastructure_lxc, jellyfin_lxc, media_management_lxc, downloads_lxc
 - [x] Create `ansible/playbooks/configure-proxmox.yml`:
   - Disable enterprise repos, add no-subscription repo
-  - Configure GRUB for GPU passthrough
-  - Create vfio-pci configuration
+  - ~~Configure GRUB for GPU passthrough~~ (not needed for LXC)
+  - ~~Create vfio-pci configuration~~ (not needed for LXC)
   - Import ZFS pools if needed
   - Install and configure NFS server
   - Configure NFS shares via ZFS
@@ -353,22 +322,43 @@
   - Automated Ubuntu cloud template creation
   - Cloud-init configuration with SSH keys
   - Template ID 9001, ready for VM deployment
-- [x] Create `ansible/playbooks/deploy-media-stack.yml`:
-  - Install Docker Engine and Docker Compose v2
-  - Install Mesa VA-API drivers for AMD GPU
-  - Deploy media stack compose file
-  - Verify all containers running
-- [x] Create `ansible/playbooks/setup-media-services-gpu.yml`:
-  - Install linux-modules-extra for amdgpu driver
-  - Install Mesa GPU drivers (VA-API, VDPAU, Vulkan)
-  - Load amdgpu module and configure autoload
-  - Verify GPU device accessible
-- [x] Create `ansible/docker-compose/media-stack.yml`:
-  - Gluetun (VPN for qBittorrent)
-  - qBittorrent (with VPN)
+- [x] Create `ansible/playbooks/setup-media-services-lxc.yml`:
+  - Create LXC 110 with GPU access
+  - Configure subordinate GID ranges for GPU groups
+  - Setup GPU device sharing (card0, renderD128)
+  - Configure ID mapping for unprivileged container
+  - Mount /tank-media/data via bind mount
+- [x] Create `ansible/playbooks/create-media-lxc-infrastructure.yml`:
+  - Create LXC 111 (media-management)
+  - Create LXC 112 (downloads with TUN device)
+  - Configure static IPs
+  - Mount storage bind mounts
+- [x] Create `ansible/playbooks/migrate-vm-to-lxc.yml`:
+  - Stop old media-services VM
+  - Create 3 LXC containers
+  - Install Docker in each container
+  - Deploy compose stacks
+  - Preserve existing configurations
+- [ ] Create `ansible/playbooks/setup-infrastructure-lxc.yml`:
+  - Create LXC 101 for infrastructure services
+  - Static IP: 192.168.10.222 (VLAN 10)
+  - Install Docker
+  - Deploy cloudflared container
+- [x] Create `ansible/docker-compose/jellyfin-stack.yml`:
   - Jellyfin (with GPU /dev/dri)
-  - Sonarr, Radarr, Prowlarr, Bazarr
   - Jellyseerr
+  - Ollama (with GPU)
+  - Navidrome
+- [x] Create `ansible/docker-compose/media-management-stack.yml`:
+  - Sonarr, Radarr, Lidarr
+  - Prowlarr, Bazarr, Bookshelf
+  - Subgen (CPU-only, AMD GPU unsupported)
+- [x] Create `ansible/docker-compose/downloads-stack.yml`:
+  - Gluetun (VPN with WireGuard)
+  - qBittorrent (network_mode: service:gluetun)
+- [ ] Create `ansible/docker-compose/infrastructure-stack.yml`:
+  - cloudflared (Cloudflare Tunnel)
+  - Routes external traffic to internal services
 - [ ] Create `ansible/docker-compose/gpu-test.yml` (if eGPU configured):
 
   ```yaml
@@ -398,34 +388,48 @@
 
 ### [x] Create CI/CD Workflows
 - [ ] Create `.github/workflows/validate.yml`:
-  - Run `nix flake check`
   - Run `tofu validate`
   - Run `ansible-playbook --syntax-check`
-- [ ] Create `.github/workflows/deploy-nixos.yml`:
+  - Run `yamllint` and `ansible-lint`
+- [ ] Create `.github/workflows/deploy-infra.yml`:
   - Trigger on merge to main
   - Run `tofu apply`
-  - Run `nixos-rebuild switch` for both VMs
-- [ ] Create `.github/workflows/deploy-custom.yml`:
+  - Run Ansible playbooks for LXC deployment
+- [ ] Create `.github/workflows/deploy-containers.yml`:
   - Trigger on changes to `ansible/docker-compose/`
   - Run `ansible-playbook deploy-containers.yml`
 
 ## Deployment
 
-**Architecture Decision:** Using Ubuntu VMs with Docker instead of NixOS for simpler deployment and management.
+**Architecture Decision:** Using LXC containers for all services (better GPU compatibility, lighter weight).
 
 ### [x] Deploy Infrastructure
 
 - [x] Switched from telmate/proxmox to bpg/proxmox provider (better maintained)
 - [x] Plan: `cd terraform && tofu plan -out=plan.tfplan`
 - [x] Apply: `tofu apply plan.tfplan`
-- [x] Fix: Added `machine = "q35"` for GPU passthrough support
-- [x] Verify VMs created in Proxmox
+- [x] Migrated media-services VM to 3 LXC containers (2026-02-16)
+- [x] Decommissioned media-services VM (100)
+- [ ] Replace infrastructure VM with LXC 101
 
-**Created VMs:**
+**Active VMs:**
 
-- media-services (100): 6 cores, 20GB RAM, AMD 780M GPU, VLANs 20+40
-- infrastructure (101): 2 cores, 4GB RAM, VLANs 10+30
 - custom-workloads (102): 4 cores, 28GB RAM, VLAN 20
+
+**Active LXC Containers:**
+
+- jellyfin (110): 192.168.20.191, VLAN 20, GPU-enabled
+- media-management (111): 192.168.20.192, VLAN 20
+- downloads (112): 192.168.40.162, VLAN 40
+
+**Planned LXC:**
+
+- infrastructure (101): 192.168.10.222, VLAN 10, cloudflared
+
+**Decommissioned:**
+
+- ~~media-services (100)~~: Replaced by LXC 110+111+112
+- ~~infrastructure VM (101)~~: To be replaced by LXC 101
 
 ### [x] Configure VLAN Routing
 
@@ -440,11 +444,16 @@
 
 **VM IP Assignments:**
 
-- infrastructure: 192.168.10.222 (VLAN 10)
-- media-services: 192.168.20.191 (VLAN 20), 192.168.40.230 (VLAN 40)
 - custom-workloads: 192.168.20.106 (VLAN 20)
 
-**Note:** media-services 2nd NIC (VLAN 40) configured via cloud-init. infrastructure 2nd NIC (VLAN 30) needs manual configuration.
+**LXC IP Assignments (Static):**
+
+- infrastructure (101): 192.168.10.222 (VLAN 10) - planned
+- jellyfin (110): 192.168.20.191 (VLAN 20)
+- media-management (111): 192.168.20.192 (VLAN 20)
+- downloads (112): 192.168.40.162 (VLAN 40)
+
+**Note:** LXC containers use static IPs configured via `pct set`.
 
 ### [x] Verify Connectivity
 
@@ -452,65 +461,129 @@
 - [x] Ansible connectivity verified
 - [x] Updated ansible/inventory.yml with correct IPs
 
+### [x] Migrate VM to LXC Containers
+
+**Issue:** AMD Phoenix 780M iGPU GPU passthrough failed in Linux VMs (PSP firmware issue)
+
+**Investigation:**
+- VM GPU passthrough: AMD 780M visible but /dev/dri/renderD128 missing
+- Tried: rombar=true, different VBIOS files, driver reinstalls
+- Root cause: AMD Phoenix/780M PSP firmware incompatible with Linux VM passthrough
+- Works in Windows VMs, consistently fails in Linux VMs (known issue)
+
+**Solution:** Migrate from single VM to 3 LXC containers with direct GPU sharing
+
+**Migration Process (2026-02-16):**
+
+1. [x] Created 3 Docker Compose stack files:
+   - jellyfin-stack.yml (GPU services)
+   - media-management-stack.yml (*arr stack)
+   - downloads-stack.yml (VPN + qBittorrent)
+
+2. [x] Created Ansible playbooks:
+   - setup-media-services-lxc.yml (LXC 110 with GPU)
+   - create-media-lxc-infrastructure.yml (LXC 111 + 112)
+   - migrate-vm-to-lxc.yml (automated migration)
+
+3. [x] Executed migration:
+   - Stopped media-services VM containers
+   - Created 3 unprivileged LXC containers
+   - Configured GPU device sharing for LXC 110
+   - Deployed Docker stacks to each LXC
+   - Fixed UID mapping issues (1000→101000)
+   - Configured static IPs
+   - Verified all services operational
+
+4. [x] Decommissioned media-services VM (100):
+   - Destroyed VM from Proxmox
+   - Removed from Terraform config
+   - Removed from Ansible inventory
+   - Committed changes
+
+**Issues Fixed:**
+
+- Permission errors: chown -R 101000:101000 on all service configs
+- GPU access: Subordinate GID mapping for video (44) and render (993)
+- Network: Assigned static IPs to all LXC containers
+- TUN device: Added /dev/net/tun for Gluetun VPN in LXC 112
+
+**Result:** All services running on LXC with GPU transcoding ready to test
+
 ### [x] Deploy Docker + Services
 
-- [x] Created Docker Compose file for media stack
-- [x] Deployed to media-services:
+- [x] Created 3 Docker Compose files (jellyfin, media-management, downloads)
+- [x] Deployed to LXC containers:
 
   ```bash
-  ansible-playbook -i ansible/inventory.yml playbooks/deploy-media-stack.yml
+  ansible-playbook -i ansible/inventory.yml playbooks/migrate-vm-to-lxc.yml
   ```
 
-- [x] Verified: All containers running
+- [x] Fixed permission issues (UID mapping 1000→101000)
+- [x] Configured static IPs for all LXC containers
+- [x] Verified: All containers running and accessible
 
-**Services deployed:**
+**Services deployed (LXC 110 - Jellyfin Stack):**
 
-- Jellyfin (with GPU transcoding via /dev/dri/card0) - http://192.168.20.191:8096
-- Sonarr - http://192.168.20.191:8989
-- Radarr - http://192.168.20.191:7878
-- Prowlarr - http://192.168.20.191:9696
-- Bazarr - http://192.168.20.191:6767
-- qBittorrent (via Gluetun VPN) - http://192.168.20.191:8080
+- Jellyfin (GPU: /dev/dri/card0 + renderD128) - http://192.168.20.191:8096
 - Jellyseerr - http://192.168.20.191:5055
-- [ ] Caddy (on infrastructure VM) - TODO
+- Ollama (GPU) - http://192.168.20.191:11434
+- Navidrome - http://192.168.20.191:4533
+
+**Services deployed (LXC 111 - Media Management):**
+
+- Sonarr - http://192.168.20.192:8989
+- Radarr - http://192.168.20.192:7878
+- Lidarr - http://192.168.20.192:8686
+- Prowlarr - http://192.168.20.192:9696
+- Bazarr - http://192.168.20.192:6767
+- Bookshelf - http://192.168.20.192:8787
+- Subgen (CPU) - http://192.168.20.192:9000
+
+**Services deployed (LXC 112 - Downloads):**
+
+- qBittorrent (via Gluetun VPN) - http://192.168.40.162:8080
+- Gluetun (WireGuard VPN) - healthy
+
+**Status (2026-02-16):**
+
+- [x] All services deployed and running
+- [x] Basic configuration complete (media libraries, indexers, download clients)
+- [x] Workflow validated (Prowlarr → Sonarr/Radarr → qBittorrent → Jellyfin)
+- [x] Hardlinks working correctly
+- [ ] GPU transcoding not yet tested
+- [ ] Cloudflare Tunnel pending
+- [ ] Mac NFS storage pending
 
 ## Next Steps
 
 ### Immediate Priority
 
-1. **Configure 2nd NICs** (optional but recommended for proper segmentation):
+1. **GPU Transcoding Validation:**
 
-   - infrastructure: Enable ens19 for VLAN 30 (Public - Caddy external access)
-   - media-services: Enable enp6s19 for VLAN 40 (Downloads - qBittorrent)
+   - Test 4K video transcoding in Jellyfin UI
+   - Monitor GPU usage: `cat /sys/class/drm/card0/device/gpu_busy_percent`
+   - Verify VA-API working with AMD 780M iGPU
 
-2. **Create Docker Compose files:**
+2. **Mac Storage Setup:**
 
-   - `ansible/docker-compose/media-stack.yml` (Jellyfin, *arr stack, qBittorrent)
-   - `ansible/docker-compose/caddy.yml` (reverse proxy)
+   - Configure NFS export: `zfs set sharenfs="rw=@192.168.0.0/24,no_root_squash" tank-vms/mac-workspace`
+   - Mount NFS share on Mac over 10GbE
+   - Benchmark performance (target: 400-800 MB/s)
 
-3. **Update/create Ansible playbooks:**
+3. **Cloudflare Tunnel Setup:**
 
-   - `ansible/playbooks/deploy-containers.yml` (install Docker, deploy compose files)
-   - Configure GPU passthrough for Jellyfin container
-
-4. **Deploy services:**
-
-   - Run Ansible playbook to deploy containers
-   - Configure services (Jellyfin, *arr stack, etc.)
-   - Setup Caddy reverse proxy
-
-5. **NFS setup for Mac:**
-
-   - Configure NFS exports on Proxmox
-   - Mount NFS shares on Mac
-   - Test performance
+   - Create infrastructure LXC 101 (192.168.10.222, VLAN 10)
+   - Deploy cloudflared via Docker Compose
+   - Create tunnel in Cloudflare dashboard
+   - Configure routes (jellyfin.yourdomain.com → http://192.168.20.191:8096)
+   - Test external HTTPS access (no port forwarding needed)
 
 ### Nice to Have
 
-- Configure secondary NICs via cloud-init or Ansible
-- Setup monitoring (Grafana, Prometheus)
-- Configure automated backups
+- Setup monitoring (Dozzle for logs, Grafana/Prometheus)
+- Configure automated ZFS snapshots (sanoid/syncoid)
 - Setup Renovate for container updates
+- Document network layout, GPU config, backup procedures
 
 ## Mac Storage Configuration
 
@@ -544,59 +617,85 @@
 
 ## Service Configuration
 
-### [ ] Configure Jellyfin
-- [ ] Access web UI: http://media-services:8096
-- [ ] Complete setup wizard
-- [ ] Dashboard → Playback → Enable VA-API
-- [ ] Add media libraries:
+### [x] Configure Jellyfin
+- [x] Access web UI: http://192.168.20.191:8096
+- [x] Complete setup wizard
+- [x] Dashboard → Playback → Enable VA-API
+- [x] Add media libraries:
   - Movies: /data/media/movies
   - TV: /data/media/tv
   - Music: /data/media/music
-- [ ] Network → Known Proxies: Add Caddy IP
+- [ ] Network → Known Proxies: Add Cloudflare IPs (pending tunnel deployment)
 
-### [ ] Configure Prowlarr
-- [ ] Access web UI: http://media-services:9696
-- [ ] Settings → Indexers → Add indexers
-- [ ] Settings → Apps → Add Sonarr (get API key from sops)
-- [ ] Settings → Apps → Add Radarr (get API key from sops)
-- [ ] Test sync
+### [x] Configure Prowlarr
+- [x] Access web UI: http://192.168.20.192:9696
+- [x] Settings → Indexers → Add indexers
+- [x] Settings → Apps → Add Sonarr
+- [x] Settings → Apps → Add Radarr
+- [x] Test sync
 
-### [ ] Configure Sonarr
-- [ ] Access web UI: http://media-services:8989
-- [ ] Settings → Download Clients → Add qBittorrent
-- [ ] Settings → Media Management → Root folder: /data/media/tv
-- [ ] Settings → Profiles → Configure quality profiles
+### [x] Configure Sonarr
+- [x] Access web UI: http://192.168.20.192:8989
+- [x] Settings → Download Clients → Add qBittorrent
+- [x] Settings → Media Management → Root folder: /data/media/tv
+- [x] Settings → Profiles → Configure quality profiles
 
-### [ ] Configure Radarr
-- [ ] Access web UI: http://media-services:7878
-- [ ] Settings → Download Clients → Add qBittorrent
-- [ ] Settings → Media Management → Root folder: /data/media/movies
-- [ ] Settings → Profiles → Configure quality profiles
+### [x] Configure Radarr
+- [x] Access web UI: http://192.168.20.192:7878
+- [x] Settings → Download Clients → Add qBittorrent
+- [x] Settings → Media Management → Root folder: /data/media/movies
+- [x] Settings → Profiles → Configure quality profiles
 
-### [ ] Configure qBittorrent
-- [ ] Access web UI: http://media-services:8080
-- [ ] Settings → Downloads → Default Save Path: /data/downloads/complete
-- [ ] Settings → Downloads → Temp Path: /data/downloads/incomplete
+### [x] Configure qBittorrent
+- [x] Access web UI: http://192.168.40.162:8080
+- [x] Settings → Downloads → Default Save Path: /data/downloads/complete
+- [x] Settings → Downloads → Temp Path: /data/downloads/incomplete
 
-### [ ] Configure Caddy
-- [ ] Update domain in `nixos/hosts/infrastructure/caddy.nix`
-- [ ] Point DNS to Proxmox public IP
-- [ ] Deploy: `nixos-rebuild switch --flake .#infrastructure`
-- [ ] Verify Let's Encrypt cert: `curl -I https://jellyfin.yourdomain.com`
+### [ ] Configure Cloudflare Tunnel
+- [ ] Create infrastructure LXC 101:
+  ```bash
+  ansible-playbook -i ansible/inventory.yml playbooks/setup-infrastructure-lxc.yml
+  ```
+- [ ] Authenticate cloudflared (one-time): `cloudflared tunnel login`
+- [ ] Create tunnel: `cloudflared tunnel create home-nas`
+- [ ] Save tunnel credentials to `ansible/secrets/secrets.yaml` (sops-encrypted)
+- [ ] Create `ansible/docker-compose/infrastructure-stack.yml`:
+  ```yaml
+  services:
+    cloudflared:
+      image: cloudflare/cloudflared:latest
+      command: tunnel run
+      environment:
+        TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+      restart: unless-stopped
+  ```
+- [ ] Or use config file approach with ingress rules
+- [ ] Add DNS record in Cloudflare dashboard (CNAME to tunnel)
+- [ ] Deploy: `ansible-playbook -i ansible/inventory.yml playbooks/deploy-infrastructure.yml`
+- [ ] Test access: `curl -I https://jellyfin.yourdomain.com`
 
 ## Validation
 
-### [x] Test GPU Passthrough
+### [x] Test GPU Access (LXC Direct Sharing)
 
-**Test iGPU (media-services VM):**
+**Architecture:** Direct GPU device sharing from Proxmox host to LXC (no VM passthrough)
 
-- [x] SSH to media-services: `ssh root@192.168.20.191`
-- [x] Verified GPU visible: AMD Phoenix3 (780M) at 0000:01:00.0
-- [x] Verified amdgpu driver loaded
-- [x] Verified GPU device: /dev/dri/card0
-- [x] Jellyfin container has GPU access
-- [ ] Test 4K video transcoding in Jellyfin
-- [ ] Monitor GPU usage during transcode
+**Host GPU Configuration:**
+
+- [x] AMD 780M iGPU using amdgpu driver on host
+- [x] GPU devices: /dev/dri/card0 (video:44), /dev/dri/renderD128 (render:993)
+- [x] Subordinate GID mapping configured (/etc/subgid)
+- [x] VA-API verified with Mesa Gallium driver
+
+**LXC 110 GPU Access:**
+
+- [x] LXC config: lxc.mount.entry for card0 + renderD128
+- [x] LXC config: lxc.cgroup2.devices.allow for GPU majors
+- [x] ID mapping: video (44) and render (993) groups mapped
+- [x] Jellyfin container has GPU access (/dev/dri mounted)
+- [x] VA-API codecs: H264, HEVC, VP9, AV1
+- [ ] Test 4K video transcoding in Jellyfin UI
+- [ ] Monitor GPU usage: `cat /sys/class/drm/card0/device/gpu_busy_percent`
 
 **Test eGPU (custom-workloads VM, if configured):**
 - [ ] SSH to custom-workloads: `ssh ubuntu@custom-workloads`
@@ -613,29 +712,24 @@
   ```
 - [ ] Verify OCuLink stability: leave GPU under load, monitor `dmesg` for PCIe errors
 
-### [ ] Test Arr Workflow
-- [ ] Access Jellyseerr (if configured) or directly request in Sonarr
-- [ ] Request TV show
-- [ ] Verify Prowlarr search
-- [ ] Verify Sonarr grabs release
-- [ ] Verify qBittorrent downloads
-- [ ] Verify file moves to /data/media/tv
-- [ ] Verify Jellyfin detects new episode
+### [x] Test Arr Workflow
+- [x] Access Jellyseerr (if configured) or directly request in Sonarr
+- [x] Request TV show
+- [x] Verify Prowlarr search
+- [x] Verify Sonarr grabs release
+- [x] Verify qBittorrent downloads
+- [x] Verify file moves to /data/media/tv
+- [x] Verify Jellyfin detects new episode
 
-### [ ] Test Hardlinks
-- [ ] Wait for download to complete
-- [ ] Check inodes:
-  ```bash
-  ssh root@media-services
-  ls -li /data/downloads/complete/file.mkv
-  ls -li /data/media/tv/Show/file.mkv
-  ```
-- [ ] Verify same inode number (hardlink success)
+### [x] Test Hardlinks
+- [x] Wait for download to complete
+- [x] Check inodes: verified same inode between downloads and media
+- [x] Verify same inode number (hardlink success)
 
 ### [ ] Test External Access
 - [ ] Access https://jellyfin.yourdomain.com from external network
 - [ ] Test playback
-- [ ] Verify HTTPS certificate valid
+- [ ] Verify HTTPS certificate (Cloudflare-managed)
 
 ### [ ] Test Backups
 - [ ] Verify ZFS snapshots: `zfs list -t snapshot`
@@ -707,7 +801,7 @@
 - [ ] Review and merge Renovate PRs
 - [ ] Check backup retention
 - [ ] Review storage usage
-- [ ] Update NixOS VMs: `nixos-rebuild switch`
+- [ ] Update LXC containers: `pct update` or rebuild from Ansible
 
 ### Quarterly
 - [ ] Test disaster recovery procedures

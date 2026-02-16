@@ -1,0 +1,96 @@
+---
+- name: Create infrastructure LXC container
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 101
+    ct_hostname: infrastructure
+    ct_memory: 4096
+    ct_cores: 2
+    ct_storage: tank-vms
+    ct_rootfs_size: 16
+    ct_static_ip: 192.168.10.222/24
+    ct_gateway: 192.168.10.1
+    template: ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+
+  tasks:
+    - name: Create LXC container with dual NICs
+      ansible.builtin.command:
+        cmd: >
+          ssh root@{{ proxmox_host }} pct create {{ ct_id }}
+          local:vztmpl/{{ template }}
+          --hostname {{ ct_hostname }}
+          --memory {{ ct_memory }}
+          --cores {{ ct_cores }}
+          --storage {{ ct_storage }}
+          --rootfs {{ ct_storage }}:{{ ct_rootfs_size }}
+          --net0 name=eth0,bridge=vmbr0,tag=10,ip=dhcp
+          --net1 name=eth1,bridge=vmbr0,tag=20,ip=dhcp
+          --unprivileged 1
+          --features nesting=1
+          --onboot 1
+      register: create_result
+      failed_when:
+        - create_result.rc != 0
+        - "'already exists' not in create_result.stderr"
+      changed_when: create_result.rc == 0
+
+    - name: Start container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      register: start_result
+      failed_when:
+        - start_result.rc != 0
+        - "'already running' not in start_result.stderr"
+      changed_when: start_result.rc == 0
+
+    - name: Wait for container to boot
+      ansible.builtin.wait_for:
+        timeout: 15
+      delegate_to: localhost
+
+    - name: Configure static IP on eth0
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct set {{ ct_id }} --net0 name=eth0,bridge=vmbr0,tag=10,ip={{ ct_static_ip }},gw={{ ct_gateway }}
+      changed_when: true
+
+    - name: Restart container to apply network config
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct reboot {{ ct_id }}
+      changed_when: true
+
+    - name: Wait for container after restart
+      ansible.builtin.wait_for:
+        timeout: 15
+      delegate_to: localhost
+
+- name: Configure infrastructure LXC
+  hosts: infrastructure
+  become: true
+
+  tasks:
+    - name: Install Docker and dependencies
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create infrastructure directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/infrastructure
+        - /opt/traefik
+        - /opt/traefik/config
+        - /var/log/traefik
