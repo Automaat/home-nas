@@ -1,3 +1,4 @@
+---
 api:
   dashboard: true
   insecure: true  # Dashboard on :8080 (internal only)
