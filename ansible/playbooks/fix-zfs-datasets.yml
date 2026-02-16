@@ -1,0 +1,290 @@
+---
+- name: Fix ZFS dataset structure for hardlinks
+  hosts: proxmox
+  become: true
+
+  vars:
+    parent_dataset: tank-media/data
+    parent_mount: /tank-media/data
+    backup_dir: /tank-media/backup-datasets
+    vm_id: 100
+
+  tasks:
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Shutdown media-services VM gracefully
+      ansible.builtin.command:
+        cmd: qm shutdown {{ vm_id }}
+      changed_when: true
+
+    - name: Wait for VM to stop
+      ansible.builtin.shell:
+        cmd: "set -o pipefail && qm status {{ vm_id }} | grep -q 'status: stopped'"
+      args:
+        executable: /bin/bash
+      register: vm_shutdown_check
+      retries: 30
+      delay: 10
+      until: vm_shutdown_check.rc == 0
+      changed_when: false
+
+    - name: Check if snapshot exists
+      ansible.builtin.shell:
+        cmd: set -o pipefail && zfs list -t snapshot | grep -q "@pre-consolidation"
+      args:
+        executable: /bin/bash
+      register: snapshot_exists
+      failed_when: false
+      changed_when: false
+
+    - name: Snapshot child datasets before migration
+      ansible.builtin.command:
+        cmd: zfs snapshot -r {{ parent_dataset }}@pre-consolidation
+      when: snapshot_exists.rc != 0
+      changed_when: true
+      register: new_snapshot
+
+    - name: Display rollback command
+      ansible.builtin.debug:
+        msg: |
+          ROLLBACK COMMAND (if anything goes wrong):
+          zfs rollback -r {{ parent_dataset }}@pre-consolidation
+
+    - name: List child datasets
+      ansible.builtin.shell:
+        cmd: set -o pipefail && zfs list -H -o name -r {{ parent_dataset }} | grep -v "^{{ parent_dataset }}$" | tac
+      args:
+        executable: /bin/bash
+      register: child_datasets
+      changed_when: false
+
+    - name: Display child datasets to be consolidated
+      ansible.builtin.debug:
+        var: child_datasets.stdout_lines
+
+    - name: Backup child datasets with zfs send
+      ansible.builtin.shell:
+        cmd: |
+          zfs send -R {{ parent_dataset }}/downloads@pre-consolidation > {{ backup_dir }}/downloads-backup.zfs
+          zfs send -R {{ parent_dataset }}/media@pre-consolidation > {{ backup_dir }}/media-backup.zfs
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Verify backups created
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: backup_files
+      failed_when: not backup_files.stat.exists
+      loop:
+        - "{{ backup_dir }}/downloads-backup.zfs"
+        - "{{ backup_dir }}/media-backup.zfs"
+
+    - name: Copy data to temporary location before destroying datasets
+      ansible.posix.synchronize:
+        src: "{{ parent_mount }}/{{ item.src }}/"
+        dest: "{{ backup_dir }}/{{ item.dest }}/"
+        archive: true
+        links: true
+      delegate_to: "{{ inventory_hostname }}"
+      loop:
+        - {src: downloads, dest: downloads-data}
+        - {src: media, dest: media-data}
+
+    - name: Verify backup data
+      ansible.builtin.shell:
+        cmd: |
+          diff -r {{ parent_mount }}/downloads {{ backup_dir }}/downloads-data || true
+          diff -r {{ parent_mount }}/media {{ backup_dir }}/media-data || true
+      register: diff_result
+      changed_when: false
+
+    - name: Display diff results
+      ansible.builtin.debug:
+        msg: "{{ diff_result.stdout_lines }}"
+
+    - name: Unmount and destroy child datasets
+      ansible.builtin.shell:
+        cmd: |
+          umount {{ parent_mount }}/downloads/complete 2>/dev/null || true
+          umount {{ parent_mount }}/downloads/incomplete 2>/dev/null || true
+          umount {{ parent_mount }}/downloads 2>/dev/null || true
+          umount {{ parent_mount }}/media/movies 2>/dev/null || true
+          umount {{ parent_mount }}/media/music 2>/dev/null || true
+          umount {{ parent_mount }}/media/tv 2>/dev/null || true
+          umount {{ parent_mount }}/media 2>/dev/null || true
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Verify datasets unmounted
+      ansible.builtin.shell:
+        cmd: set -o pipefail && mount | grep -q "{{ parent_mount }}"
+      args:
+        executable: /bin/bash
+      register: still_mounted
+      failed_when: still_mounted.rc == 0
+      changed_when: false
+
+    - name: Remove mount point directories
+      ansible.builtin.file:
+        path: "{{ parent_mount }}/{{ item }}"
+        state: absent
+      loop:
+        - downloads
+        - media
+
+    - name: Destroy child datasets
+      ansible.builtin.command:
+        cmd: zfs destroy -r {{ item }}
+      loop: "{{ child_datasets.stdout_lines }}"
+      when: child_datasets.stdout_lines | length > 0
+      changed_when: true
+
+    - name: Recreate directory structure
+      ansible.builtin.file:
+        path: "{{ parent_mount }}/{{ item }}"
+        state: directory
+        owner: '1000'
+        group: '1000'
+        mode: '0755'
+      loop:
+        - downloads
+        - downloads/complete
+        - downloads/incomplete
+        - media
+        - media/movies
+        - media/music
+        - media/tv
+
+    - name: Restore data from backup
+      ansible.posix.synchronize:
+        src: "{{ backup_dir }}/{{ item.src }}/"
+        dest: "{{ parent_mount }}/{{ item.dest }}/"
+        archive: true
+        links: true
+      delegate_to: "{{ inventory_hostname }}"
+      loop:
+        - {src: downloads-data, dest: downloads}
+        - {src: media-data, dest: media}
+
+    - name: Verify data restored correctly
+      ansible.builtin.shell:
+        cmd: |
+          ls -laR {{ parent_mount }}/downloads
+          ls -laR {{ parent_mount }}/media
+      register: restored_data
+      changed_when: false
+
+    - name: Display restored data
+      ansible.builtin.debug:
+        msg: "{{ restored_data.stdout_lines }}"
+
+    - name: Verify single filesystem
+      ansible.builtin.command:
+        cmd: zfs list -r {{ parent_dataset }}
+      register: final_datasets
+      changed_when: false
+
+    - name: Display final ZFS structure
+      ansible.builtin.debug:
+        var: final_datasets.stdout_lines
+
+    - name: Start media-services VM
+      ansible.builtin.command:
+        cmd: qm start {{ vm_id }}
+      changed_when: true
+
+    - name: Wait for VM to be ready
+      ansible.builtin.wait_for:
+        host: "{{ hostvars['media-services']['ansible_host'] }}"
+        port: 22
+        delay: 15
+        timeout: 120
+
+- name: Verify hardlinks work on media-services VM
+  hosts: media-services
+  become: true
+
+  vars:
+    mount_point: /data
+
+  tasks:
+    - name: Verify mount is active
+      ansible.builtin.shell:
+        cmd: set -o pipefail && mount | grep "{{ mount_point }}"
+      args:
+        executable: /bin/bash
+      register: verify_mount
+      changed_when: false
+
+    - name: Display mount info
+      ansible.builtin.debug:
+        var: verify_mount.stdout_lines
+
+    - name: Test hardlink creation
+      block:
+        - name: Create test file in downloads
+          ansible.builtin.file:
+            path: "{{ mount_point }}/downloads/hardlink-test"
+            state: touch
+            mode: '0644'
+
+        - name: Create hardlink in media
+          ansible.builtin.file:
+            src: "{{ mount_point }}/downloads/hardlink-test"
+            dest: "{{ mount_point }}/media/hardlink-test"
+            state: hard
+            mode: '0644'
+
+        - name: Get inodes
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          register: inode_check
+          loop:
+            - "{{ mount_point }}/downloads/hardlink-test"
+            - "{{ mount_point }}/media/hardlink-test"
+
+        - name: Verify hardlinks work
+          ansible.builtin.assert:
+            that:
+              - inode_check.results[0].stat.inode == inode_check.results[1].stat.inode
+            fail_msg: "Hardlinks not working - different inodes"
+            success_msg: "Hardlinks working correctly - same inode {{ inode_check.results[0].stat.inode }}"
+
+        - name: Display inode info
+          ansible.builtin.debug:
+            msg: "File 1 inode: {{ inode_check.results[0].stat.inode }}, File 2 inode: {{ inode_check.results[1].stat.inode }}"
+
+        - name: Cleanup test files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "{{ mount_point }}/downloads/hardlink-test"
+            - "{{ mount_point }}/media/hardlink-test"
+
+    - name: Start Docker containers
+      ansible.builtin.command:
+        cmd: docker compose -f /opt/media-stack/docker-compose.yml up -d
+      args:
+        chdir: /opt/media-stack
+      changed_when: true
+
+    - name: Wait for containers to start
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Verify containers running
+      ansible.builtin.command:
+        cmd: docker ps --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
+      register: containers
+      changed_when: false
+
+    - name: Display container status
+      ansible.builtin.debug:
+        var: containers.stdout_lines
