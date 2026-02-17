@@ -70,8 +70,8 @@ services:
       - 6881:6881/udp
     environment:
       - VPN_SERVICE_PROVIDER=private internet access
-      - OPENVPN_USER=p4386889
-      - OPENVPN_PASSWORD=81jR3hv*kVUbqaV^arIz@72BX
+      - OPENVPN_USER=${PIA_USER}
+      - OPENVPN_PASSWORD=${PIA_PASSWORD}
       - SERVER_REGIONS=Netherlands
       - VPN_PORT_FORWARDING=on
       - OPENVPN_ENCRYPTION_PRESET=normal

@@ -312,7 +312,6 @@ chown -R 1000:1000 /data/downloads
 ## Related Documentation
 
 - [VPN Testing Procedures](vpn-testing.md) - How to safely test with/without VPN
-- [Torrent Speed Optimization Research](../research/torrent-optimization-2026-02-16.md) - Full research findings
 - [qBittorrent Configuration](https://github.com/qbittorrent/qBittorrent/wiki/Explanation-of-Options-in-qBittorrent)
 
 ## Change Log

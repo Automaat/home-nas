@@ -33,7 +33,7 @@
       ansible.builtin.lineinfile:
         path: /etc/pve/qemu-server/{{ vm_id }}.conf
         regexp: '^args:'
-        line: 'args: -fsdev local,id={{ mount_tag }},path={{ host_path }},security_model=none -device virtio-9p-pci,fsdev={{ mount_tag }},mount_tag={{ mount_tag }}'
+        line: 'args: -fsdev local,id={{ mount_tag }},path={{ host_path }},security_model=mapped -device virtio-9p-pci,fsdev={{ mount_tag }},mount_tag={{ mount_tag }}'
         state: present
       when: virtfs_exists.rc != 0
       register: virtfs_config

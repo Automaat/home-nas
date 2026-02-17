@@ -174,7 +174,7 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:rocm  # ROCm version for AMD GPU support
+    image: ollama/ollama:rocm  # ROCm (latest as of Feb 2026: ~v0.16.2), rolling tag
     container_name: ollama
     devices:
       - /dev/kfd:/dev/kfd  # ROCm kernel driver
