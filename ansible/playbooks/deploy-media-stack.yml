@@ -5,8 +5,7 @@
 
   vars:
     data_root: /data
-    compose_file: /opt/media-stack/docker-compose.yml
-    env_file: /opt/media-stack/.env
+    compose_file: /opt/jellyfin-stack/docker-compose.yml
 
   tasks:
     - name: Install Docker
@@ -32,72 +31,31 @@
         group: "1000"
       loop:
         - "{{ data_root }}"
-        - "{{ data_root }}/gluetun"
-        - "{{ data_root }}/qbittorrent/config"
         - "{{ data_root }}/jellyfin/config"
-        - "{{ data_root }}/sonarr/config"
-        - "{{ data_root }}/radarr/config"
-        - "{{ data_root }}/lidarr/config"
-        - "{{ data_root }}/bookshelf/config"
-        - "{{ data_root }}/prowlarr/config"
-        - "{{ data_root }}/bazarr/config"
         - "{{ data_root }}/jellyseerr/config"
-        - "{{ data_root }}/subgen/config"
-        - "{{ data_root }}/subgen/log"
+        - "{{ data_root }}/ollama/models"
         - "{{ data_root }}/navidrome/config"
-        - "{{ data_root }}/downloads"
-        - "{{ data_root }}/downloads/incomplete"
-        - "{{ data_root }}/downloads/complete"
         - "{{ data_root }}/media"
         - "{{ data_root }}/media/tv"
         - "{{ data_root }}/media/movies"
         - "{{ data_root }}/media/music"
         - "{{ data_root }}/media/books"
 
-    - name: Create Ollama directory (local storage)
-      ansible.builtin.file:
-        path: /opt/ollama
-        state: directory
-        mode: '0755'
-
     - name: Create compose directory
       ansible.builtin.file:
-        path: /opt/media-stack
+        path: /opt/jellyfin-stack
         state: directory
         mode: '0755'
 
     - name: Copy docker-compose file
       ansible.builtin.copy:
-        src: ../docker-compose/media-stack.yml
+        src: ../docker-compose/jellyfin-stack.yml
         dest: "{{ compose_file }}"
         mode: '0644'
 
-    - name: Extract wireguard private key from sops
-      ansible.builtin.shell: |
-        set -o pipefail
-        sops -d --extract '["protonvpn_wg_conf"]' {{ playbook_dir }}/../secrets/secrets.yaml | grep 'PrivateKey' | awk -F' = ' '{print $2}'
-      register: wg_key_result
-      delegate_to: localhost
-      become: false
-      no_log: true
-      changed_when: false
-
-    - name: Set wireguard private key fact
-      ansible.builtin.set_fact:
-        wg_private_key: "{{ wg_key_result.stdout }}"
-      no_log: true
-
-    - name: Create .env file with wireguard private key
-      ansible.builtin.copy:
-        content: |
-          WIREGUARD_PRIVATE_KEY={{ wg_private_key }}
-        dest: "{{ env_file }}"
-        mode: '0600'
-      no_log: true
-
-    - name: Deploy media stack
+    - name: Deploy jellyfin stack
       community.docker.docker_compose_v2:
-        project_src: /opt/media-stack
+        project_src: /opt/jellyfin-stack
         state: present
         pull: always
 
@@ -107,16 +65,7 @@
       register: container_info
       failed_when: not container_info.exists or container_info.container.State.Status != 'running'
       loop:
-        - gluetun
-        - qbittorrent
         - jellyfin
-        - sonarr
-        - radarr
-        - lidarr
-        - bookshelf
-        - prowlarr
-        - bazarr
         - jellyseerr
-        - subgen
         - ollama
         - navidrome
