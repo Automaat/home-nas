@@ -1,0 +1,125 @@
+---
+- name: Deploy Paperless-ngx to custom-workloads VM
+  hosts: custom-workloads
+  become: true
+
+  vars:
+    data_root: /data
+    compose_file: /opt/paperless/docker-compose.yml
+    env_file: /opt/paperless/.env
+
+  tasks:
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: "1000"
+        group: "1000"
+      loop:
+        - "{{ data_root }}/paperless"
+        - "{{ data_root }}/paperless/data"
+        - "{{ data_root }}/paperless/media"
+        - "{{ data_root }}/paperless/export"
+        - "{{ data_root }}/paperless/consume"
+        - "{{ data_root }}/paperless/postgres"
+        - "{{ data_root }}/paperless/redis"
+
+    - name: Create compose directory
+      ansible.builtin.file:
+        path: /opt/paperless
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/paperless-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Extract paperless secrets from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["paperless_db_password"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: db_password_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Extract paperless secret key from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["paperless_secret_key"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: secret_key_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Extract paperless admin credentials from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["paperless_admin_user"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: admin_user_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Extract paperless admin password from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["paperless_admin_password"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: admin_password_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set paperless secrets facts
+      ansible.builtin.set_fact:
+        paperless_db_password: "{{ db_password_result.stdout }}"
+        paperless_secret_key: "{{ secret_key_result.stdout }}"
+        paperless_admin_user: "{{ admin_user_result.stdout }}"
+        paperless_admin_password: "{{ admin_password_result.stdout }}"
+      no_log: true
+
+    - name: Create .env file
+      ansible.builtin.copy:
+        content: |
+          PAPERLESS_DB_PASSWORD={{ paperless_db_password }}
+          PAPERLESS_SECRET_KEY={{ paperless_secret_key }}
+          PAPERLESS_ADMIN_USER={{ paperless_admin_user }}
+          PAPERLESS_ADMIN_PASSWORD={{ paperless_admin_password }}
+        dest: "{{ env_file }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Deploy Paperless stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/paperless
+        state: present
+        pull: always
+
+    - name: Wait for services to be ready
+      ansible.builtin.wait_for:
+        timeout: 30
+      delegate_to: localhost
+      become: false
+
+    - name: Verify containers are running
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      register: container_info
+      failed_when: not container_info.exists or container_info.container.State.Status != 'running'
+      loop:
+        - paperless-ngx
+        - paperless-postgres
+        - paperless-redis
