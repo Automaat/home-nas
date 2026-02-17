@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:0.16.1
+    image: ollama/ollama:0.16.2
     container_name: ollama
     devices:
       - /dev/dri:/dev/dri  # AMD GPU for inference
