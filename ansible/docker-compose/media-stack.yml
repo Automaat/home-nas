@@ -174,15 +174,19 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:0.16.2
+    image: ollama/ollama:rocm  # ROCm (latest as of Feb 2026: ~v0.16.2), rolling tag
     container_name: ollama
     devices:
+      - /dev/kfd:/dev/kfd  # ROCm kernel driver
       - /dev/dri:/dev/dri  # AMD GPU for inference
+    group_add:
+      - "44"   # video group
+      - "993"  # render group
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - HSA_OVERRIDE_GFX_VERSION=11.0.0  # AMD 780M compatibility
     volumes:
-      - /data/ollama/models:/root/.ollama
+      - /opt/ollama:/root/.ollama  # Local storage (not shared ZFS) to avoid permission issues
     ports:
       - 11434:11434
     restart: unless-stopped

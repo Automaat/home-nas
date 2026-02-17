@@ -16,6 +16,9 @@ services:
       - 1900:1900/udp  # DLNA
     devices:
       - /dev/dri:/dev/dri  # GPU for transcoding
+    group_add:
+      - "44"   # video group
+      - "993"  # render group (for renderD128)
     restart: unless-stopped
 
   jellyseerr:

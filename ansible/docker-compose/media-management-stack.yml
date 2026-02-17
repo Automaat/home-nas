@@ -99,3 +99,29 @@ services:
     ports:
       - 9000:9000
     restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.4.6
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=Europe/Amsterdam
+    ports:
+      - 8191:8191
+    restart: unless-stopped
+
+  mylar3:
+    image: lscr.io/linuxserver/mylar3:v0.8.3-ls240
+    container_name: mylar3
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Amsterdam
+    volumes:
+      - /data/mylar3/config:/config
+      - /data:/data
+    ports:
+      - 8090:8090
+    restart: unless-stopped

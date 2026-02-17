@@ -1,6 +1,6 @@
 ---
-- name: Deploy media stack to media-services VM
-  hosts: media-services
+- name: Deploy media stack to Jellyfin LXC
+  hosts: jellyfin
   become: true
 
   vars:
@@ -44,7 +44,6 @@
         - "{{ data_root }}/jellyseerr/config"
         - "{{ data_root }}/subgen/config"
         - "{{ data_root }}/subgen/log"
-        - "{{ data_root }}/ollama/models"
         - "{{ data_root }}/navidrome/config"
         - "{{ data_root }}/downloads"
         - "{{ data_root }}/downloads/incomplete"
@@ -54,6 +53,12 @@
         - "{{ data_root }}/media/movies"
         - "{{ data_root }}/media/music"
         - "{{ data_root }}/media/books"
+
+    - name: Create Ollama directory (local storage)
+      ansible.builtin.file:
+        path: /opt/ollama
+        state: directory
+        mode: '0755'
 
     - name: Create compose directory
       ansible.builtin.file:

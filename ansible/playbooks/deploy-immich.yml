@@ -1,0 +1,95 @@
+---
+- name: Deploy Immich to jellyfin LXC
+  hosts: jellyfin
+  become: true
+
+  vars:
+    data_root: /data
+    compose_file: /opt/immich/docker-compose.yml
+    env_file: /opt/immich/.env
+
+  tasks:
+    - name: Install Docker
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: "1000"
+        group: "1000"
+      loop:
+        - "{{ data_root }}/immich"
+        - "{{ data_root }}/immich/upload"
+        - "{{ data_root }}/immich/postgres"
+        - "{{ data_root }}/immich/model-cache"
+
+    - name: Create compose directory
+      ansible.builtin.file:
+        path: /opt/immich
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/immich-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Extract immich DB password from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["immich_db_password"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: db_password_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set immich DB password fact
+      ansible.builtin.set_fact:
+        immich_db_password: "{{ db_password_result.stdout }}"
+      no_log: true
+
+    - name: Create .env file
+      ansible.builtin.copy:
+        content: |
+          IMMICH_VERSION=release
+          IMMICH_DB_PASSWORD={{ immich_db_password }}
+        dest: "{{ env_file }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Deploy Immich stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/immich
+        state: present
+        pull: always
+
+    - name: Wait for services to be ready
+      ansible.builtin.wait_for:
+        timeout: 30
+      delegate_to: localhost
+
+    - name: Verify containers are running
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      register: container_info
+      failed_when: not container_info.exists or container_info.container.State.Status != 'running'
+      loop:
+        - immich_server
+        - immich_machine_learning
+        - immich_redis
+        - immich_postgres

@@ -1,0 +1,137 @@
+---
+- name: Configure VirtioFS on custom-workloads VM
+  hosts: proxmox
+  become: true
+
+  vars:
+    vm_id: 102
+    host_path: /tank-media/data
+    mount_tag: tank-media
+
+  tasks:
+    - name: Check if VirtioFS already configured
+      ansible.builtin.shell:
+        cmd: set -o pipefail && qm config {{ vm_id }} | grep -q "^args:.*fsdev"
+      args:
+        executable: /bin/bash
+      register: virtfs_exists
+      failed_when: false
+      changed_when: false
+
+    - name: Shutdown VM for VirtioFS configuration
+      ansible.builtin.command:
+        cmd: qm shutdown {{ vm_id }}
+      when: virtfs_exists.rc != 0
+      changed_when: true
+
+    - name: Wait for VM to shutdown
+      ansible.builtin.pause:
+        seconds: 15
+      when: virtfs_exists.rc != 0
+
+    - name: Add VirtioFS to VM config
+      ansible.builtin.lineinfile:
+        path: /etc/pve/qemu-server/{{ vm_id }}.conf
+        regexp: '^args:'
+        line: 'args: -fsdev local,id={{ mount_tag }},path={{ host_path }},security_model=mapped -device virtio-9p-pci,fsdev={{ mount_tag }},mount_tag={{ mount_tag }}'
+        state: present
+      when: virtfs_exists.rc != 0
+      register: virtfs_config
+
+    - name: Start VM with VirtioFS
+      ansible.builtin.command:
+        cmd: qm start {{ vm_id }}
+      when: virtfs_exists.rc != 0
+      changed_when: true
+
+    - name: Wait for VM to be ready
+      ansible.builtin.wait_for:
+        host: "{{ hostvars['custom-workloads']['ansible_host'] }}"
+        port: 22
+        delay: 15
+        timeout: 120
+      when: virtfs_exists.rc != 0
+
+    - name: Set permissions on media directories for VirtioFS UID mapping
+      ansible.builtin.file:
+        path: "{{ host_path }}/media"
+        mode: '0777'
+        state: directory
+        recurse: false
+
+    - name: Verify VirtioFS configuration
+      ansible.builtin.shell:
+        cmd: set -o pipefail && qm config {{ vm_id }} | grep "^args:"
+      args:
+        executable: /bin/bash
+      register: vm_config
+      changed_when: false
+
+    - name: Display VirtioFS config
+      ansible.builtin.debug:
+        var: vm_config.stdout_lines
+
+- name: Configure VirtioFS mount on custom-workloads VM
+  hosts: custom-workloads
+  become: true
+
+  vars:
+    mount_point: /mnt/tank-media
+    mount_tag: tank-media
+
+  tasks:
+    - name: Ensure mount point directory exists
+      ansible.builtin.file:
+        path: "{{ mount_point }}"
+        state: directory
+        mode: '0755'
+
+    - name: Add VirtioFS mount to fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        line: "{{ mount_tag }} {{ mount_point }} 9p trans=virtio,version=9p2000.L,msize=104857600,_netdev 0 0"
+        state: present
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Mount VirtioFS
+      ansible.posix.mount:
+        path: "{{ mount_point }}"
+        src: "{{ mount_tag }}"
+        fstype: 9p
+        opts: trans=virtio,version=9p2000.L,msize=104857600,_netdev
+        state: mounted
+
+    - name: Verify mount
+      ansible.builtin.shell:
+        cmd: set -o pipefail && mount | grep "{{ mount_point }}"
+      args:
+        executable: /bin/bash
+      register: verify_mount
+      changed_when: false
+
+    - name: Display mount info
+      ansible.builtin.debug:
+        var: verify_mount.stdout_lines
+
+    - name: Verify mount is 9p type (VirtioFS)
+      ansible.builtin.assert:
+        that:
+          - "'9p' in verify_mount.stdout or 'virtio' in verify_mount.stdout"
+        fail_msg: "Mount type is not 9p/VirtioFS"
+        success_msg: "VirtioFS mount configured correctly"
+
+    - name: Verify downloads directory accessible
+      ansible.builtin.stat:
+        path: "{{ mount_point }}/downloads"
+      register: downloads_dir
+
+    - name: Assert downloads directory exists
+      ansible.builtin.assert:
+        that:
+          - downloads_dir.stat.exists
+          - downloads_dir.stat.isdir
+        fail_msg: "Downloads directory not accessible via VirtioFS"
+        success_msg: "Downloads directory accessible at {{ mount_point }}/downloads"
