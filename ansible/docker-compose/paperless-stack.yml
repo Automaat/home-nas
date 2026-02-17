@@ -1,0 +1,61 @@
+---
+services:
+  paperless-broker:
+    container_name: paperless-redis
+    image: docker.io/valkey/valkey:9
+    restart: unless-stopped
+    volumes:
+      - /data/paperless/redis:/data
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+  paperless-db:
+    container_name: paperless-postgres
+    image: docker.io/library/postgres:17
+    restart: unless-stopped
+    volumes:
+      - /data/paperless/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperless"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  paperless-webserver:
+    container_name: paperless-ngx
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    depends_on:
+      - paperless-db
+      - paperless-broker
+    ports:
+      - "8010:8000"
+    volumes:
+      - /data/paperless/data:/usr/src/paperless/data
+      - /data/paperless/media:/usr/src/paperless/media
+      - /data/paperless/export:/usr/src/paperless/export
+      - /data/paperless/consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_REDIS: redis://paperless-redis:6379
+      PAPERLESS_DBHOST: paperless-postgres
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_URL: https://paperless.mskalski.dev
+      PAPERLESS_ALLOWED_HOSTS: paperless.mskalski.dev,192.168.20.106
+      PAPERLESS_CSRF_TRUSTED_ORIGINS: https://paperless.mskalski.dev,http://192.168.20.106:8010
+      PAPERLESS_CORS_ALLOWED_HOSTS: https://paperless.mskalski.dev
+      PAPERLESS_TIME_ZONE: Europe/Amsterdam
+      PAPERLESS_OCR_LANGUAGE: eng
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
