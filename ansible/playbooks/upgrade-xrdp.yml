@@ -1,0 +1,134 @@
+---
+# ansible/playbooks/upgrade-xrdp.yml
+# Builds and installs xrdp 0.10.x from source to fix reconnection bugs
+- name: Upgrade xrdp from source
+  hosts: desktop
+  become: true
+
+  vars:
+    xrdp_version: "0.10.5"
+    xrdp_src: /tmp/xrdp-build
+
+  tasks:
+    - name: Install build dependencies
+      ansible.builtin.apt:
+        name:
+          - autoconf
+          - libtool
+          - pkg-config
+          - make
+          - gcc
+          - g++
+          - nasm
+          - libssl-dev
+          - libpam0g-dev
+          - libx11-dev
+          - libxfixes-dev
+          - libxrandr-dev
+          - libfuse3-dev
+          - libmp3lame-dev
+          - libfdk-aac-dev
+          - libopus-dev
+          - libpixman-1-dev
+          - libpng-dev
+          - libimlib2-dev
+          - libfreetype-dev
+        state: present
+        update_cache: true
+
+    - name: Download xrdp source
+      ansible.builtin.get_url:
+        url: "https://github.com/neutrinolabs/xrdp/releases/download/v{{ xrdp_version }}/xrdp-{{ xrdp_version }}.tar.gz"
+        dest: "/tmp/xrdp-{{ xrdp_version }}.tar.gz"
+        mode: "0644"
+
+    - name: Extract xrdp source
+      ansible.builtin.unarchive:
+        src: "/tmp/xrdp-{{ xrdp_version }}.tar.gz"
+        dest: /tmp
+        remote_src: true
+        creates: "{{ xrdp_src }}-{{ xrdp_version }}"
+
+    - name: Rename source directory
+      ansible.builtin.command:
+        cmd: "mv /tmp/xrdp-{{ xrdp_version }} {{ xrdp_src }}"
+        creates: "{{ xrdp_src }}"
+
+    - name: Bootstrap xrdp build
+      ansible.builtin.command:
+        cmd: ./bootstrap
+        chdir: "{{ xrdp_src }}"
+        creates: "{{ xrdp_src }}/configure"
+
+    - name: Configure xrdp build
+      ansible.builtin.command:
+        cmd: >-
+          ./configure
+          --prefix=/usr
+          --sysconfdir=/etc
+          --localstatedir=/var
+          --enable-fuse
+          --enable-mp3lame
+          --enable-fdkaac
+          --enable-opus
+          --enable-pixman
+          --enable-painter
+          --enable-jpeg
+        chdir: "{{ xrdp_src }}"
+        creates: "{{ xrdp_src }}/Makefile"
+
+    - name: Build xrdp
+      ansible.builtin.command:
+        cmd: make -j{{ ansible_processor_vcpus }}
+        chdir: "{{ xrdp_src }}"
+        creates: "{{ xrdp_src }}/xrdp/xrdp"
+
+    - name: Stop xrdp services before install
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - xrdp
+        - xrdp-sesman
+
+    - name: Install xrdp
+      ansible.builtin.command:
+        cmd: make install
+        chdir: "{{ xrdp_src }}"
+      changed_when: true
+
+    - name: Restore reconnectwm.sh fix
+      ansible.builtin.copy:
+        dest: /etc/xrdp/reconnectwm.sh
+        content: |
+          #!/bin/sh
+          # Wait for existing gnome-session before allowing xrdp to close
+          while pgrep -u marcin gnome-session > /dev/null 2>&1; do
+              sleep 5
+          done
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Start xrdp services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - xrdp-sesman
+        - xrdp
+
+    - name: Verify xrdp version
+      ansible.builtin.command:
+        cmd: xrdp --version
+      register: xrdp_ver
+      changed_when: false
+
+    - name: Show installed version
+      ansible.builtin.debug:
+        msg: "{{ xrdp_ver.stdout_lines[0] }}"

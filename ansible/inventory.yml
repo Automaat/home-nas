@@ -20,6 +20,14 @@ all:
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
 
+        desktop_vms:
+          hosts:
+            desktop:
+              ansible_host: 192.168.20.107
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              # Ubuntu desktop with GNOME + xRDP (VM ID 103, VLAN 20)
+
     lxc_containers:
       children:
         infrastructure_lxc:

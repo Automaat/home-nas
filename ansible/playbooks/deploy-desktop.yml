@@ -1,0 +1,133 @@
+---
+# ansible/playbooks/deploy-desktop.yml
+# Provisions Ubuntu GNOME desktop with xRDP remote access
+# Connect: RDP client → 192.168.20.248:3389
+# Note: set user password after deploy: passwd marcin
+- name: Deploy Ubuntu desktop with xRDP
+  hosts: desktop
+  become: true
+
+  vars:
+    desktop_user: marcin
+    desktop_ssh_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJx8wg+9mULtkH3ZgSIoF/GWaIIUNHslkWeo0bukAwuT skalskimarcin33@gmail.com"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install Ubuntu GNOME desktop and xrdp
+      ansible.builtin.apt:
+        name:
+          - ubuntu-desktop
+          - xrdp
+          - dbus-x11
+        state: present
+        install_recommends: true
+      async: 3600
+      poll: 30
+
+    - name: Disable Wayland in GDM (xrdp requires X11)
+      ansible.builtin.lineinfile:
+        path: /etc/gdm3/custom.conf
+        regexp: "^#?WaylandEnable="
+        line: "WaylandEnable=false"
+        insertafter: "\\[daemon\\]"
+
+    - name: Add xrdp to ssl-cert group
+      ansible.builtin.user:
+        name: xrdp
+        groups: ssl-cert
+        append: true
+
+    - name: Configure xrdp to launch GNOME session
+      ansible.builtin.copy:
+        dest: /etc/xrdp/startwm.sh
+        content: |
+          #!/bin/sh
+          if test -r /etc/profile; then
+              . /etc/profile
+          fi
+          if test -r "$HOME/.profile"; then
+              . "$HOME/.profile"
+          fi
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          export XDG_SESSION_TYPE=x11
+          export XDG_CURRENT_DESKTOP=ubuntu:GNOME
+          export GNOME_SHELL_SESSION_MODE=ubuntu
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          exec dbus-run-session -- gnome-session --disable-acceleration-check
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Create polkit rules.d directory
+      ansible.builtin.file:
+        path: /etc/polkit-1/rules.d
+        state: directory
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Create polkit rule to suppress color manager auth prompts
+      ansible.builtin.copy:
+        dest: /etc/polkit-1/rules.d/45-colord.rules
+        content: |
+          polkit.addRule(function(action, subject) {
+              if (action.id.indexOf("org.freedesktop.color-manager.") === 0 && subject.active) {
+                  return polkit.Result.YES;
+              }
+          });
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: Create desktop user
+      ansible.builtin.user:
+        name: "{{ desktop_user }}"
+        groups: sudo
+        append: true
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Add SSH key for desktop user
+      ansible.posix.authorized_key:
+        user: "{{ desktop_user }}"
+        key: "{{ desktop_ssh_key }}"
+        state: present
+
+    - name: Enable and start xrdp
+      ansible.builtin.systemd:
+        name: xrdp
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Allow RDP through UFW
+      community.general.ufw:
+        rule: allow
+        port: "3389"
+        proto: tcp
+
+    - name: Fix xrdp reconnect script to keep session alive
+      ansible.builtin.copy:
+        dest: /etc/xrdp/reconnectwm.sh
+        content: |
+          #!/bin/sh
+          # Wait for existing gnome-session before allowing xrdp to close
+          while pgrep -u marcin gnome-session > /dev/null 2>&1; do
+              sleep 5
+          done
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Verify xrdp is listening
+      ansible.builtin.wait_for:
+        port: 3389
+        host: "{{ ansible_host }}"
+        timeout: 30
+        delay: 5
