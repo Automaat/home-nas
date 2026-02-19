@@ -155,6 +155,30 @@
       ansible.builtin.debug:
         var: nfs_exports.stdout_lines
 
+    # === Hardlink Support for Unprivileged LXC ===
+    # media-management LXC (unprivileged) bind-mounts /tank-media/data
+    # VirtioFS (mapped mode) creates files owned by host root
+    # protected_hardlinks=0 allows Sonarr (uid 1000 in LXC = 101000 on host)
+    # to hardlink files it doesn't own
+    - name: Disable protected_hardlinks for arr stack cross-UID hardlinks
+      ansible.posix.sysctl:
+        name: fs.protected_hardlinks
+        value: '0'
+        state: present
+        sysctl_file: /etc/sysctl.d/99-homelab.conf
+        reload: true
+
+    # VirtioFS mapped-mode creates download files owned by host root (uid 0)
+    # Sonarr runs as uid 1000 in LXC (= uid 101000 on host)
+    # Cron ensures new completed downloads are accessible by Sonarr
+    - name: Add cron to fix downloads/complete ownership for Sonarr
+      ansible.builtin.cron:
+        name: fix-downloads-ownership
+        minute: "*/5"
+        user: root
+        job: "chown -R 101000:101000 /tank-media/data/downloads/complete/ 2>/dev/null"
+        cron_file: fix-downloads-ownership
+
     # === Reboot Notification ===
     - name: Display reboot required message
       ansible.builtin.debug:
