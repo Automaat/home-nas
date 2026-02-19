@@ -41,4 +41,5 @@ services:
     volumes:
       - /mnt/tank-media/qbittorrent:/config
       - /mnt/tank-media/downloads:/data/downloads
+    stop_grace_period: 120s
     restart: unless-stopped

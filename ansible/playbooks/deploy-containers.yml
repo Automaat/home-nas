@@ -62,14 +62,11 @@
         dest: /opt/docker-compose/
         mode: '0644'
 
-    - name: Start all compose stacks
+    - name: Start custom-workloads compose stacks
       ansible.builtin.command: docker compose -f {{ item }} up -d
       args:
         chdir: /opt/docker-compose
-      loop: >-
-        {{ lookup('fileglob', '../docker-compose/*.yml', wantlist=True)
-        | map('basename') | list }}
-      when: >-
-        lookup('fileglob', '../docker-compose/*.yml', wantlist=True)
-        | length > 0
+      loop:
+        - paperless-stack.yml
+        - nextcloud-stack.yml
       changed_when: true
