@@ -41,6 +41,24 @@ http:
       entryPoints: [web]
       middlewares: [internal-whitelist]
 
+    nextcloud:
+      rule: "Host(`nextcloud.mskalski.dev`)"
+      service: nextcloud
+      entryPoints: [web]
+      middlewares: [internal-whitelist]
+
+    mixarr:
+      rule: "Host(`mixarr.mskalski.dev`)"
+      service: mixarr
+      entryPoints: [web]
+      middlewares: [internal-whitelist]
+
+    lidify:
+      rule: "Host(`lidify.mskalski.dev`)"
+      service: lidify
+      entryPoints: [web]
+      middlewares: [internal-whitelist]
+
   services:
     jellyfin:
       loadBalancer:
@@ -76,6 +94,21 @@ http:
       loadBalancer:
         servers:
           - url: "http://192.168.20.106:8010"
+
+    nextcloud:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.106:8020"
+
+    mixarr:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.191:3010"
+
+    lidify:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.191:5000"
 
   middlewares:
     internal-whitelist:
