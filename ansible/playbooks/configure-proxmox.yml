@@ -155,6 +155,15 @@
       ansible.builtin.debug:
         var: nfs_exports.stdout_lines
 
+    # === IP Forwarding (inter-VLAN routing) ===
+    - name: Enable IP forwarding for inter-VLAN routing
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        sysctl_file: /etc/sysctl.d/99-homelab.conf
+        reload: true
+
     # === Hardlink Support for Unprivileged LXC ===
     # media-management LXC (unprivileged) bind-mounts /tank-media/data
     # VirtioFS (mapped mode) creates files owned by host root
