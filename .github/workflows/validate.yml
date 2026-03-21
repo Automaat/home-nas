@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
+      MISE_PYTHON_PRECOMPILED_FLAVOR: install_only
     steps:
       # Cannot pin by digest: Renovate will manage action updates
       - uses: actions/checkout@v6
@@ -70,6 +71,8 @@ jobs:
 
   ansible:
     runs-on: ubuntu-latest
+    env:
+      MISE_PYTHON_PRECOMPILED_FLAVOR: install_only
     steps:
       # Cannot pin by digest: Renovate will manage action updates
       - uses: actions/checkout@v6
