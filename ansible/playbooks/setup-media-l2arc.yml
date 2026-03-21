@@ -21,10 +21,11 @@
       ansible.builtin.command:
         cmd: zfs create -V {{ l2arc_size }} -o compression=off -o sync=disabled {{ l2arc_zvol }}
       when: zvol_check.rc != 0
+      changed_when: zvol_check.rc != 0
 
     - name: Check if L2ARC already attached to pool
-      ansible.builtin.shell:
-        cmd: zpool status {{ target_pool }} | grep -q l2arc-media
+      ansible.builtin.command:
+        cmd: zpool status {{ target_pool }}
       register: cache_check
       failed_when: false
       changed_when: false
@@ -32,7 +33,8 @@
     - name: Add L2ARC cache device to pool
       ansible.builtin.command:
         cmd: zpool add {{ target_pool }} cache {{ l2arc_device }}
-      when: cache_check.rc != 0
+      when: "'l2arc-media' not in cache_check.stdout"
+      changed_when: "'l2arc-media' not in cache_check.stdout"
 
     - name: Enable L2ARC prefetch for streaming workloads
       ansible.builtin.copy:
