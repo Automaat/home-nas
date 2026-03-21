@@ -9,3 +9,7 @@ ansible-core = "2.20.2"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
+
+[settings]
+# Use standard CPython build (freethreaded variant missing lib/ on Linux)
+python_flavor = "install_only"
