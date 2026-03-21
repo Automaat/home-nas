@@ -125,3 +125,19 @@ services:
     ports:
       - 8090:8090
     restart: unless-stopped
+
+  lingarr:
+    image: ghcr.io/lingarr-translate/lingarr:v1.4.0
+    container_name: lingarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Amsterdam
+      - ASPNETCORE_URLS=http://+:9876
+      - DB_CONNECTION=sqlite
+    volumes:
+      - /data/media:/data/media:ro
+      - /opt/lingarr/config:/app/config
+    ports:
+      - 9876:9876
+    restart: unless-stopped

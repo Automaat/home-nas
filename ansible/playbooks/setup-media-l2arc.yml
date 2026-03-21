@@ -1,0 +1,59 @@
+---
+- name: Add NVMe L2ARC read cache to tank-media pool
+  hosts: proxmox
+  become: true
+
+  vars:
+    l2arc_zvol: tank-vms/l2arc-media
+    l2arc_size: 128G
+    l2arc_device: /dev/zvol/tank-vms/l2arc-media
+    target_pool: tank-media
+
+  tasks:
+    - name: Check if L2ARC zvol exists
+      ansible.builtin.command:
+        cmd: zfs list {{ l2arc_zvol }}
+      register: zvol_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create L2ARC zvol on NVMe pool
+      ansible.builtin.command:
+        cmd: zfs create -V {{ l2arc_size }} -o compression=off -o sync=disabled {{ l2arc_zvol }}
+      when: zvol_check.rc != 0
+      changed_when: zvol_check.rc != 0
+
+    - name: Check if L2ARC already attached to pool
+      ansible.builtin.command:
+        cmd: zpool status {{ target_pool }}
+      register: cache_check
+      failed_when: false
+      changed_when: false
+
+    - name: Add L2ARC cache device to pool
+      ansible.builtin.command:
+        cmd: zpool add {{ target_pool }} cache {{ l2arc_device }}
+      when: "'l2arc-media' not in cache_check.stdout"
+      changed_when: "'l2arc-media' not in cache_check.stdout"
+
+    - name: Enable L2ARC prefetch for streaming workloads
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/zfs-l2arc.conf
+        content: |
+          options zfs l2arc_noprefetch=0
+        mode: '0644'
+
+    - name: Apply L2ARC prefetch at runtime
+      ansible.builtin.shell:
+        cmd: echo 0 > /sys/module/zfs/parameters/l2arc_noprefetch
+      changed_when: false
+
+    - name: Verify pool status
+      ansible.builtin.command:
+        cmd: zpool status {{ target_pool }}
+      register: pool_status
+      changed_when: false
+
+    - name: Display pool status
+      ansible.builtin.debug:
+        var: pool_status.stdout_lines

@@ -1,0 +1,69 @@
+---
+services:
+  nextcloud-db:
+    container_name: nextcloud-postgres
+    image: docker.io/library/postgres:17
+    restart: unless-stopped
+    volumes:
+      - /data/nextcloud/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextcloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nextcloud-redis:
+    container_name: nextcloud-redis
+    image: docker.io/valkey/valkey:9
+    restart: unless-stopped
+    volumes:
+      - /data/nextcloud/redis:/data
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+  nextcloud:
+    container_name: nextcloud
+    image: docker.io/library/nextcloud:31-apache
+    restart: unless-stopped
+    depends_on:
+      nextcloud-db:
+        condition: service_healthy
+      nextcloud-redis:
+        condition: service_healthy
+    ports:
+      - "8020:80"
+    volumes:
+      - /data/nextcloud/html:/var/www/html
+    environment:
+      POSTGRES_HOST: nextcloud-db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.mskalski.dev
+      REDIS_HOST: nextcloud-redis
+      OVERWRITEPROTOCOL: https
+      OVERWRITEHOST: nextcloud.mskalski.dev
+      OVERWRITECLIURL: https://nextcloud.mskalski.dev
+      TRUSTED_PROXIES: 172.16.0.0/12 192.168.0.0/16
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/status.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  nextcloud-cron:
+    container_name: nextcloud-cron
+    image: docker.io/library/nextcloud:31-apache
+    restart: unless-stopped
+    depends_on:
+      nextcloud:
+        condition: service_started
+    volumes:
+      - /data/nextcloud/html:/var/www/html
+    entrypoint: /cron.sh

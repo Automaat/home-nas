@@ -1,0 +1,231 @@
+---
+# ansible/playbooks/deploy-desktop.yml
+# Provisions Ubuntu GNOME desktop with xRDP remote access
+# Connect: RDP client → 192.168.20.107:3389
+# Note: set user password after deploy: passwd marcin
+- name: Deploy Ubuntu desktop with xRDP
+  hosts: desktop
+  become: true
+
+  vars:
+    desktop_user: marcin
+    desktop_ssh_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJx8wg+9mULtkH3ZgSIoF/GWaIIUNHslkWeo0bukAwuT skalskimarcin33@gmail.com"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install Ubuntu GNOME desktop and xrdp
+      ansible.builtin.apt:
+        name:
+          - ubuntu-desktop
+          - xrdp
+          - dbus-x11
+        state: present
+        install_recommends: true
+      async: 3600
+      poll: 30
+
+    - name: Disable Wayland in GDM (xrdp requires X11)
+      ansible.builtin.lineinfile:
+        path: /etc/gdm3/custom.conf
+        regexp: "^#?WaylandEnable="
+        line: "WaylandEnable=false"
+        insertafter: "\\[daemon\\]"
+
+    - name: Add xrdp to ssl-cert group
+      ansible.builtin.user:
+        name: xrdp
+        groups: ssl-cert
+        append: true
+
+    - name: Configure xrdp to launch GNOME session
+      ansible.builtin.copy:
+        dest: /etc/xrdp/startwm.sh
+        content: |
+          #!/bin/sh
+          if test -r /etc/profile; then
+              . /etc/profile
+          fi
+          if test -r "$HOME/.profile"; then
+              . "$HOME/.profile"
+          fi
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          export XDG_SESSION_TYPE=x11
+          export XDG_CURRENT_DESKTOP=ubuntu:GNOME
+          export GNOME_SHELL_SESSION_MODE=ubuntu
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          exec dbus-run-session -- gnome-session --disable-acceleration-check
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Create polkit rules.d directory
+      ansible.builtin.file:
+        path: /etc/polkit-1/rules.d
+        state: directory
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Create polkit rule to suppress color manager auth prompts
+      ansible.builtin.copy:
+        dest: /etc/polkit-1/rules.d/45-colord.rules
+        content: |
+          polkit.addRule(function(action, subject) {
+              if (action.id.indexOf("org.freedesktop.color-manager.") === 0 && subject.active) {
+                  return polkit.Result.YES;
+              }
+          });
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: Create desktop user
+      ansible.builtin.user:
+        name: "{{ desktop_user }}"
+        groups: sudo
+        append: true
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Add SSH key for desktop user
+      ansible.posix.authorized_key:
+        user: "{{ desktop_user }}"
+        key: "{{ desktop_ssh_key }}"
+        state: present
+
+    - name: Enable and start xrdp
+      ansible.builtin.systemd:
+        name: xrdp
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Allow RDP through UFW
+      community.general.ufw:
+        rule: allow
+        port: "3389"
+        proto: tcp
+
+    - name: Fix xrdp reconnect script to keep session alive
+      ansible.builtin.copy:
+        dest: /etc/xrdp/reconnectwm.sh
+        content: |
+          #!/bin/sh
+          # Wait for existing gnome-session before allowing xrdp to close
+          while pgrep -u {{ desktop_user }} gnome-session > /dev/null 2>&1; do
+              sleep 5
+          done
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Allow client to control RDP experience settings
+      ansible.builtin.lineinfile:
+        path: /etc/xrdp/xrdp.ini
+        regexp: "^#?perf\\.{{ item.key }}="
+        line: "perf.{{ item.key }}={{ item.value }}"
+      loop:
+        - {key: allow_client_experiencesettings, value: "true"}
+        - {key: wallpaper, value: "false"}
+        - {key: font_smoothing, value: "false"}
+        - {key: desktop_composition, value: "false"}
+        - {key: full_window_drag, value: "false"}
+        - {key: menu_anims, value: "false"}
+        - {key: themes, value: "false"}
+        - {key: cursor_blink, value: "false"}
+
+    - name: Keep sessions alive when client disconnects
+      ansible.builtin.lineinfile:
+        path: /etc/xrdp/sesman.ini
+        regexp: "^#?KillDisconnected="
+        line: "KillDisconnected=false"
+        insertafter: "^MaxSessions="
+
+    - name: Create dconf system profile
+      ansible.builtin.copy:
+        dest: /etc/dconf/profile/user
+        mode: "0644"
+        content: |
+          user-db:user
+          system-db:local
+
+    - name: Create dconf local database directory
+      ansible.builtin.file:
+        path: /etc/dconf/db/local.d
+        state: directory
+        mode: "0755"
+
+    - name: Disable GNOME animations and screensaver (reduces CPU on software renderer)
+      ansible.builtin.copy:
+        dest: /etc/dconf/db/local.d/00-xrdp-perf
+        mode: "0644"
+        content: |
+          [org/gnome/desktop/interface]
+          enable-animations=false
+
+          [org/gnome/desktop/screensaver]
+          idle-activation-enabled=false
+
+    - name: Update dconf database
+      ansible.builtin.command:
+        cmd: dconf update
+      changed_when: true
+
+    - name: Suppress update-notifier popup on login
+      ansible.builtin.lineinfile:
+        path: /etc/xdg/autostart/update-notifier.desktop
+        regexp: "^X-GNOME-Autostart-enabled="
+        line: "X-GNOME-Autostart-enabled=false"
+
+    - name: Install extra kernel modules (required for zram)
+      ansible.builtin.apt:
+        name: "linux-modules-extra-{{ ansible_kernel }}"
+        state: present
+
+    - name: Configure zram swap (4G compressed, prevents OOM)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/zram-swap.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=ZRAM swap
+          After=multi-user.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/bin/bash -c '\
+            modprobe zram && \
+            echo zstd > /sys/block/zram0/comp_algorithm && \
+            echo 4G > /sys/block/zram0/disksize && \
+            mkswap /dev/zram0 && \
+            swapon -p 100 /dev/zram0'
+          ExecStop=/bin/bash -c 'swapoff /dev/zram0 && echo 1 > /sys/block/zram0/reset'
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable zram swap
+      ansible.builtin.systemd:
+        name: zram-swap
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Restart xrdp to apply perf settings
+      ansible.builtin.systemd:
+        name: xrdp
+        state: restarted
+
+    - name: Verify xrdp is listening
+      ansible.builtin.wait_for:
+        port: 3389
+        host: "{{ ansible_host }}"
+        timeout: 30
+        delay: 5

@@ -1,0 +1,111 @@
+---
+- name: Deploy Nextcloud to custom-workloads VM
+  hosts: custom-workloads
+  become: true
+
+  vars:
+    data_root: /data
+    compose_file: /opt/nextcloud/docker-compose.yml
+    env_file: /opt/nextcloud/.env
+
+  tasks:
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: "1000"
+        group: "1000"
+      loop:
+        - "{{ data_root }}/nextcloud"
+        - "{{ data_root }}/nextcloud/html"
+        - "{{ data_root }}/nextcloud/postgres"
+        - "{{ data_root }}/nextcloud/redis"
+
+    - name: Create compose directory
+      ansible.builtin.file:
+        path: /opt/nextcloud
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/nextcloud-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Extract nextcloud db password from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["nextcloud_db_password"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: db_password_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Extract nextcloud admin user from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["nextcloud_admin_user"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: admin_user_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Extract nextcloud admin password from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["nextcloud_admin_password"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: admin_password_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set nextcloud secrets facts
+      ansible.builtin.set_fact:
+        nextcloud_db_password: "{{ db_password_result.stdout }}"
+        nextcloud_admin_user: "{{ admin_user_result.stdout }}"
+        nextcloud_admin_password: "{{ admin_password_result.stdout }}"
+      no_log: true
+
+    - name: Create .env file
+      ansible.builtin.copy:
+        content: |
+          NEXTCLOUD_DB_PASSWORD={{ nextcloud_db_password }}
+          NEXTCLOUD_ADMIN_USER={{ nextcloud_admin_user }}
+          NEXTCLOUD_ADMIN_PASSWORD={{ nextcloud_admin_password }}
+        dest: "{{ env_file }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Deploy Nextcloud stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/nextcloud
+        state: present
+        pull: always
+
+    - name: Wait for services to be ready
+      ansible.builtin.wait_for:
+        timeout: 30
+      delegate_to: localhost
+      become: false
+
+    - name: Verify containers are running
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      register: container_info
+      failed_when: not container_info.exists or container_info.container.State.Status != 'running'
+      loop:
+        - nextcloud
+        - nextcloud-postgres
+        - nextcloud-redis
+        - nextcloud-cron

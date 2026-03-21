@@ -89,6 +89,25 @@
         cmd: "ssh root@{{ proxmox_host }} \"echo 'lxc.mount.entry: /tank-media/data data none bind 0 0' >> /etc/pve/lxc/{{ ct_id }}.conf\""
       changed_when: true
 
+    - name: Create GPU permissions hookscript
+      ansible.builtin.shell:
+        cmd: |
+          ssh root@{{ proxmox_host }} "cat > /var/lib/vz/snippets/gpu-permissions.sh << 'HOOKEOF'
+          #!/bin/bash
+          # Sets /dev/dri/* group-accessible so unprivileged LXC containers can use VAAPI
+          if [[ \$2 == \"post-start\" ]]; then
+              chgrp render /dev/dri/card0 /dev/dri/renderD128 2>/dev/null
+              chmod 0660 /dev/dri/card0 /dev/dri/renderD128 2>/dev/null
+          fi
+          HOOKEOF
+          chmod +x /var/lib/vz/snippets/gpu-permissions.sh"
+      changed_when: true
+
+    - name: Attach GPU hookscript to container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct set {{ ct_id }} --hookscript local:snippets/gpu-permissions.sh
+      changed_when: true
+
     - name: Start container with all mounts
       ansible.builtin.command:
         cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}

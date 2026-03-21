@@ -30,7 +30,7 @@ services:
   #     start_period: 10s
 
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:20.04.1
+    image: lscr.io/linuxserver/qbittorrent:5.1.4-libtorrentv1
     container_name: qbittorrent
     network_mode: host
     environment:
@@ -41,4 +41,5 @@ services:
     volumes:
       - /mnt/tank-media/qbittorrent:/config
       - /mnt/tank-media/downloads:/data/downloads
+    stop_grace_period: 120s
     restart: unless-stopped
