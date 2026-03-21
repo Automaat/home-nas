@@ -69,5 +69,4 @@
       loop:
         - downloads-stack.yml
         - paperless-stack.yml
-        - nextcloud-stack.yml
       changed_when: true

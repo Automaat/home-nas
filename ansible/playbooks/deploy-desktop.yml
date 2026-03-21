@@ -1,7 +1,7 @@
 ---
 # ansible/playbooks/deploy-desktop.yml
 # Provisions Ubuntu GNOME desktop with xRDP remote access
-# Connect: RDP client → 192.168.20.248:3389
+# Connect: RDP client → 192.168.20.107:3389
 # Note: set user password after deploy: passwd marcin
 - name: Deploy Ubuntu desktop with xRDP
   hosts: desktop
@@ -118,7 +118,7 @@
         content: |
           #!/bin/sh
           # Wait for existing gnome-session before allowing xrdp to close
-          while pgrep -u marcin gnome-session > /dev/null 2>&1; do
+          while pgrep -u {{ desktop_user }} gnome-session > /dev/null 2>&1; do
               sleep 5
           done
         mode: "0755"

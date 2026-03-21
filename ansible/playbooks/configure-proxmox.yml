@@ -185,7 +185,7 @@
         name: fix-downloads-ownership
         minute: "*/5"
         user: root
-        job: "chown -R 101000:101000 /tank-media/data/downloads/complete/ 2>/dev/null"
+        job: "find /tank-media/data/downloads/complete -xdev \\( -not -user 101000 -o -not -group 101000 \\) -exec chown 101000:101000 {} + 2>/dev/null"
         cron_file: fix-downloads-ownership
 
     # === Reboot Notification ===

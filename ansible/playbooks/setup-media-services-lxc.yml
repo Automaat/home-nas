@@ -94,9 +94,10 @@
         cmd: |
           ssh root@{{ proxmox_host }} "cat > /var/lib/vz/snippets/gpu-permissions.sh << 'HOOKEOF'
           #!/bin/bash
-          # Sets /dev/dri/* to world-readable so unprivileged LXC containers can use VAAPI
+          # Sets /dev/dri/* group-accessible so unprivileged LXC containers can use VAAPI
           if [[ \$2 == \"post-start\" ]]; then
-              chmod 666 /dev/dri/card0 /dev/dri/renderD128 2>/dev/null
+              chgrp render /dev/dri/card0 /dev/dri/renderD128 2>/dev/null
+              chmod 0660 /dev/dri/card0 /dev/dri/renderD128 2>/dev/null
           fi
           HOOKEOF
           chmod +x /var/lib/vz/snippets/gpu-permissions.sh"
