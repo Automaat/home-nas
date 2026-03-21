@@ -125,6 +125,104 @@
         owner: root
         group: root
 
+    - name: Allow client to control RDP experience settings
+      ansible.builtin.lineinfile:
+        path: /etc/xrdp/xrdp.ini
+        regexp: "^#?perf\\.{{ item.key }}="
+        line: "perf.{{ item.key }}={{ item.value }}"
+      loop:
+        - {key: allow_client_experiencesettings, value: "true"}
+        - {key: wallpaper, value: "false"}
+        - {key: font_smoothing, value: "false"}
+        - {key: desktop_composition, value: "false"}
+        - {key: full_window_drag, value: "false"}
+        - {key: menu_anims, value: "false"}
+        - {key: themes, value: "false"}
+        - {key: cursor_blink, value: "false"}
+
+    - name: Keep sessions alive when client disconnects
+      ansible.builtin.lineinfile:
+        path: /etc/xrdp/sesman.ini
+        regexp: "^#?KillDisconnected="
+        line: "KillDisconnected=false"
+        insertafter: "^MaxSessions="
+
+    - name: Create dconf system profile
+      ansible.builtin.copy:
+        dest: /etc/dconf/profile/user
+        mode: "0644"
+        content: |
+          user-db:user
+          system-db:local
+
+    - name: Create dconf local database directory
+      ansible.builtin.file:
+        path: /etc/dconf/db/local.d
+        state: directory
+        mode: "0755"
+
+    - name: Disable GNOME animations and screensaver (reduces CPU on software renderer)
+      ansible.builtin.copy:
+        dest: /etc/dconf/db/local.d/00-xrdp-perf
+        mode: "0644"
+        content: |
+          [org/gnome/desktop/interface]
+          enable-animations=false
+
+          [org/gnome/desktop/screensaver]
+          idle-activation-enabled=false
+
+    - name: Update dconf database
+      ansible.builtin.command:
+        cmd: dconf update
+      changed_when: true
+
+    - name: Suppress update-notifier popup on login
+      ansible.builtin.lineinfile:
+        path: /etc/xdg/autostart/update-notifier.desktop
+        regexp: "^X-GNOME-Autostart-enabled="
+        line: "X-GNOME-Autostart-enabled=false"
+
+    - name: Install extra kernel modules (required for zram)
+      ansible.builtin.apt:
+        name: "linux-modules-extra-{{ ansible_kernel }}"
+        state: present
+
+    - name: Configure zram swap (4G compressed, prevents OOM)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/zram-swap.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=ZRAM swap
+          After=multi-user.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/bin/bash -c '\
+            modprobe zram && \
+            echo zstd > /sys/block/zram0/comp_algorithm && \
+            echo 4G > /sys/block/zram0/disksize && \
+            mkswap /dev/zram0 && \
+            swapon -p 100 /dev/zram0'
+          ExecStop=/bin/bash -c 'swapoff /dev/zram0 && echo 1 > /sys/block/zram0/reset'
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable zram swap
+      ansible.builtin.systemd:
+        name: zram-swap
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Restart xrdp to apply perf settings
+      ansible.builtin.systemd:
+        name: xrdp
+        state: restarted
+
     - name: Verify xrdp is listening
       ansible.builtin.wait_for:
         port: 3389

@@ -33,6 +33,7 @@
           - libpng-dev
           - libimlib2-dev
           - libfreetype-dev
+          - libx264-dev
         state: present
         update_cache: true
 
@@ -74,6 +75,7 @@
           --enable-pixman
           --enable-painter
           --enable-jpeg
+          --enable-x264
         chdir: "{{ xrdp_src }}"
         creates: "{{ xrdp_src }}/Makefile"
 
