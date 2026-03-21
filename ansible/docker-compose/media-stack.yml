@@ -156,7 +156,7 @@ services:
     restart: unless-stopped
 
   subgen:
-    image: mccloud/subgen:2026.02.9-cpu
+    image: mccloud/subgen:2026.03.6-cpu
     container_name: subgen
     environment:
       - WHISPER_MODEL=base  # Options: tiny, base, small, medium, large-v2, large-v3
