@@ -414,6 +414,16 @@ resource "proxmox_virtual_environment_vm" "example_vm" {
 - `infrastructure` (192.168.10.222): Ubuntu, Caddy reverse proxy (VLAN 10, 30)
 - `custom-workloads` (192.168.20.106): Ubuntu, Docker containers (VLAN 20)
 
+**LXC Containers:**
+
+- `media-management` CT 111 (192.168.20.192): Sonarr, Radarr, Prowlarr, Bazarr, Lidarr, FlareSolverr (VLAN 20)
+- `downloads` CT 112 (192.168.40.162): qBittorrent + Gluetun VPN (VLAN 40)
+
+**SSH Access:**
+
+- Use `ssh proxmox` alias (not `ssh root@192.168.0.101`) — direct IP misses `IdentityAgent none` config and hangs on Bitwarden agent
+- LXC access via: `ssh proxmox "pct exec <CT_ID> -- <command>"`
+
 **GPU Passthrough:** AMD 780M iGPU → media-services VM
 
 **VM Storage Sharing:**

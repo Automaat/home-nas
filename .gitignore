@@ -16,6 +16,9 @@ result-*
 *.swo
 *~
 
+# AI
+.klaudiush/
+
 # OS
 .DS_Store
 Thumbs.db

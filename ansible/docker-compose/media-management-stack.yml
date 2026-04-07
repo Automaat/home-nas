@@ -86,12 +86,14 @@ services:
     image: mccloud/subgen:2026.03.6-cpu
     container_name: subgen
     environment:
-      - WHISPER_MODEL=base
+      - WHISPER_MODEL=large-v3
       - TRANSCRIBE_DEVICE=cpu
       - USE_PATH_MAPPING=True
       - MONITOR=/data/media
       - PROCADDEDMEDIA=True
       - PROCMEDIAONSTART=False
+      - DETECT_LANGUAGE_OFFSET=120
+      - DETECT_LANGUAGE_LENGTH=60
     volumes:
       - /data/subgen/config:/config
       - /data/subgen/log:/log
