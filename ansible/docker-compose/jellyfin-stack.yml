@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
 
   navidrome:
-    image: deluan/navidrome:0.60.3
+    image: deluan/navidrome:0.61.1
     container_name: navidrome
     environment:
       - ND_MUSICFOLDER=/music
