@@ -27,7 +27,7 @@ services:
 
   nextcloud:
     container_name: nextcloud
-    image: docker.io/library/nextcloud:31-apache
+    image: docker.io/library/nextcloud:33-apache
     restart: unless-stopped
     depends_on:
       nextcloud-db:
@@ -59,7 +59,7 @@ services:
 
   nextcloud-cron:
     container_name: nextcloud-cron
-    image: docker.io/library/nextcloud:31-apache
+    image: docker.io/library/nextcloud:33-apache
     restart: unless-stopped
     depends_on:
       nextcloud:
