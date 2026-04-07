@@ -65,3 +65,12 @@ all:
               ansible_python_interpreter: /usr/bin/python3
               ct_id: 112
               # LXC for qBittorrent + Gluetun VPN
+
+        pet_projects_lxc:
+          hosts:
+            pet-projects:
+              ansible_host: 192.168.20.218
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 113
+              # VLAN 20 - pet project apps (finance-buddy, etc.)

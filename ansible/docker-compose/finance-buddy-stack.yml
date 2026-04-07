@@ -1,0 +1,44 @@
+---
+services:
+  finance-db:
+    container_name: finance-postgres
+    image: docker.io/library/postgres:18
+    restart: unless-stopped
+    volumes:
+      - /data/finance-buddy/postgres:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: finance
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: ${FINANCE_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  finance-backend:
+    container_name: finance-backend
+    image: ghcr.io/automaat/finance-buddy-backend:v0.0.1
+    restart: unless-stopped
+    depends_on:
+      finance-db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://finance:${FINANCE_DB_PASSWORD}@finance-postgres:5432/finance
+      APP_PASSWORD: ${FINANCE_APP_PASSWORD}
+      CORS_ORIGINS: http://localhost:3000,http://finance-app:3000,http://${HOST_IP}:3000
+
+  finance-app:
+    container_name: finance-app
+    image: ghcr.io/automaat/finance-buddy-frontend:v0.0.1
+    restart: unless-stopped
+    depends_on:
+      - finance-backend
+    ports:
+      - "3000:3000"
+    environment:
+      PUBLIC_API_URL: http://finance-backend:8000
+      PUBLIC_API_URL_BROWSER: http://${HOST_IP}:8000
+      ORIGIN: http://${HOST_IP}:3000
