@@ -21,7 +21,7 @@
     proxmox_host: 192.168.0.101
     ct_id: 111
     ct_hostname: media-management
-    ct_memory: 8192
+    ct_memory: 16384
     ct_cores: 4
     ct_storage: tank-vms
     ct_rootfs_size: 32
