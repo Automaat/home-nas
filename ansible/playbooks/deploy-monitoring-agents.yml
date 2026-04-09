@@ -22,13 +22,25 @@
         state: directory
         mode: '0755'
 
+    - name: Create promtail state directory
+      ansible.builtin.file:
+        path: /var/lib/promtail
+        state: directory
+        mode: '0755'
+
     - name: Copy monitoring agents compose file
       ansible.builtin.copy:
         src: ../docker-compose/monitoring-agents-stack.yml
         dest: "{{ compose_file }}"
         mode: '0644'
 
-    - name: Deploy cAdvisor stack
+    - name: Template promtail config
+      ansible.builtin.template:
+        src: promtail.yml.j2
+        dest: "{{ compose_dir }}/promtail.yml"
+        mode: '0644'
+
+    - name: Deploy monitoring agents stack
       community.docker.docker_compose_v2:
         project_src: "{{ compose_dir }}"
         state: present
