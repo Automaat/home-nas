@@ -16,6 +16,20 @@ services:
       timeout: 5s
       retries: 5
 
+  finance-postgres-exporter:
+    container_name: finance-postgres-exporter
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: "finance-postgres:5432/finance?sslmode=disable"
+      DATA_SOURCE_USER: finance
+      DATA_SOURCE_PASS: ${FINANCE_DB_PASSWORD}
+    ports:
+      - "9187:9187"
+    depends_on:
+      finance-db:
+        condition: service_healthy
+
   finance-backend:
     container_name: finance-backend
     image: ghcr.io/automaat/finance-buddy-backend:v0.0.1
