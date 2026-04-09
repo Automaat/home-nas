@@ -13,8 +13,10 @@ services:
       - DB_DATABASE_NAME=immich
       - REDIS_HOSTNAME=immich_redis
       - TZ=Europe/Amsterdam
+      - IMMICH_TELEMETRY_INCLUDE=all
     ports:
       - '2283:2283'
+      - '8081:8081'  # Prometheus metrics (api process)
     depends_on:
       - redis
       - database
