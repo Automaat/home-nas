@@ -3,6 +3,15 @@ api:
   dashboard: true
   insecure: true  # Dashboard on :8080 (internal only)
 
+metrics:
+  prometheus:
+    addInternals: true
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+    # /metrics served on the traefik internal entrypoint (:8080) alongside
+    # the dashboard. Scraped by homelab Prometheus.
+
 entryPoints:
   web:
     address: ":80"
