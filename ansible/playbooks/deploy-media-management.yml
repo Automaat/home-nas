@@ -68,3 +68,27 @@
         project_src: "{{ compose_dir }}"
         state: present
         pull: missing
+
+    - name: Check bazarr config file exists
+      ansible.builtin.stat:
+        path: /data/bazarr/config/config/config.yaml
+      register: bazarr_config_stat
+
+    # Bazarr ships with general.debug=true which generates ~185k log lines per
+    # 5min from subliminal_patch + urllib3. Force it off so promtail does not
+    # drown homelab Loki. Anchored on the unique days_to_upgrade_subs key
+    # right above to avoid touching the subsync.debug entry further down.
+    - name: Disable bazarr general.debug
+      ansible.builtin.replace:
+        path: /data/bazarr/config/config/config.yaml
+        regexp: '^(  days_to_upgrade_subs:.*\n  )debug: true$'
+        replace: '\1debug: false'
+      when: bazarr_config_stat.stat.exists
+      notify: Restart bazarr
+
+  handlers:
+    - name: Restart bazarr
+      community.docker.docker_container:
+        name: bazarr
+        state: started
+        restart: true
