@@ -1,0 +1,51 @@
+---
+# Deploy per-host monitoring agents (cAdvisor) to all docker hosts.
+# Exposes container metrics on :9101 for homelab Prometheus to scrape.
+#
+# Phase 3 of home-nas → smart-home monitoring integration.
+# Requires Phase 2 (node_exporter) already deployed and homelab firewall
+# allowing 9101 from home-nas source IPs (handled by nftables rule covering
+# 3100/9090 — needs extension for 9101).
+
+- name: Deploy monitoring agents to docker hosts
+  hosts: infrastructure:jellyfin:media-management:downloads:pet-projects:custom-workloads
+  become: true
+
+  vars:
+    compose_dir: /opt/monitoring-agents
+    compose_file: /opt/monitoring-agents/docker-compose.yml
+
+  tasks:
+    - name: Create compose directory
+      ansible.builtin.file:
+        path: "{{ compose_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy monitoring agents compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/monitoring-agents-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Deploy cAdvisor stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ compose_dir }}"
+        state: present
+        pull: missing
+
+    - name: Wait for cAdvisor to listen on 9101
+      ansible.builtin.wait_for:
+        host: 0.0.0.0
+        port: 9101
+        timeout: 30
+
+    - name: Verify cAdvisor /metrics endpoint responds
+      ansible.builtin.uri:
+        url: http://localhost:9101/metrics
+        status_code: 200
+        return_content: false
+      register: cadvisor_check
+      retries: 5
+      delay: 3
+      until: cadvisor_check.status == 200
