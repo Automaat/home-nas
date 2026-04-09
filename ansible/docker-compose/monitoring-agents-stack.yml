@@ -28,7 +28,7 @@ services:
       - --whitelisted_container_labels=io.kubernetes.container.name,io.kubernetes.pod.name,com.docker.compose.project,com.docker.compose.service
 
   promtail:
-    image: grafana/promtail:3.6.6
+    image: grafana/promtail:3.6.10
     container_name: promtail
     restart: unless-stopped
     volumes:
