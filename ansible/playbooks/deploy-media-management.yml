@@ -1,0 +1,70 @@
+---
+- name: Deploy media-management (*arr) stack to media-management LXC
+  hosts: media-management
+  become: true
+
+  vars:
+    compose_dir: /opt/media-management-stack
+    compose_file: /opt/media-management-stack/docker-compose.yml
+    env_file: /opt/media-management-stack/.env
+
+  tasks:
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create compose directory
+      ansible.builtin.file:
+        path: "{{ compose_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/media-management-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Extract arr API keys from sops
+      ansible.builtin.shell: |
+        set -o pipefail
+        sops -d --extract '["{{ item }}"]' {{ playbook_dir }}/../secrets/secrets.yaml
+      register: arr_key_results
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+      loop:
+        - sonarr_api_key
+        - radarr_api_key
+        - lidarr_api_key
+        - prowlarr_api_key
+        - bazarr_api_key
+
+    - name: Set arr API key facts
+      ansible.builtin.set_fact:
+        arr_keys: >-
+          {{ dict(arr_key_results.results
+                  | map(attribute='item')
+                  | zip(arr_key_results.results | map(attribute='stdout'))) }}
+      no_log: true
+
+    - name: Create .env file
+      ansible.builtin.copy:
+        content: |
+          SONARR_API_KEY={{ arr_keys.sonarr_api_key }}
+          RADARR_API_KEY={{ arr_keys.radarr_api_key }}
+          LIDARR_API_KEY={{ arr_keys.lidarr_api_key }}
+          PROWLARR_API_KEY={{ arr_keys.prowlarr_api_key }}
+          BAZARR_API_KEY={{ arr_keys.bazarr_api_key }}
+        dest: "{{ env_file }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Deploy media-management stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ compose_dir }}"
+        state: present
+        pull: missing
