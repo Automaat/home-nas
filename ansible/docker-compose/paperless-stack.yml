@@ -14,7 +14,10 @@ services:
     image: docker.io/library/postgres:18
     restart: unless-stopped
     volumes:
-      - /data/paperless/postgres:/var/lib/postgresql/data
+      # postgres:18 expects the volume at the parent dir; actual data lands
+      # in /var/lib/postgresql/18/ on disk. Using the legacy
+      # /var/lib/postgresql/data path causes the entrypoint to refuse start.
+      - /data/paperless/postgres:/var/lib/postgresql
     environment:
       POSTGRES_DB: paperless
       POSTGRES_USER: paperless
