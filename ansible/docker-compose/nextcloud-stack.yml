@@ -25,6 +25,20 @@ services:
     healthcheck:
       test: redis-cli ping || exit 1
 
+  nextcloud-postgres-exporter:
+    container_name: nextcloud-postgres-exporter
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: "nextcloud-postgres:5432/nextcloud?sslmode=disable"
+      DATA_SOURCE_USER: nextcloud
+      DATA_SOURCE_PASS: ${NEXTCLOUD_DB_PASSWORD}
+    ports:
+      - "9187:9187"
+    depends_on:
+      nextcloud-db:
+        condition: service_healthy
+
   nextcloud:
     container_name: nextcloud
     image: docker.io/library/nextcloud:33-apache

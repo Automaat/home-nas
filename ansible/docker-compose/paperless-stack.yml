@@ -25,6 +25,20 @@ services:
       timeout: 5s
       retries: 5
 
+  paperless-postgres-exporter:
+    container_name: paperless-postgres-exporter
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: "paperless-postgres:5432/paperless?sslmode=disable"
+      DATA_SOURCE_USER: paperless
+      DATA_SOURCE_PASS: ${PAPERLESS_DB_PASSWORD}
+    ports:
+      - "9188:9187"  # 9187 taken by nextcloud exporter on same host
+    depends_on:
+      paperless-db:
+        condition: service_healthy
+
   paperless-webserver:
     container_name: paperless-ngx
     image: ghcr.io/paperless-ngx/paperless-ngx:latest

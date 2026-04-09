@@ -66,3 +66,16 @@ services:
     restart: unless-stopped
     healthcheck:
       disable: false
+
+  immich-postgres-exporter:
+    container_name: immich-postgres-exporter
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: "immich-postgres:5432/immich?sslmode=disable"
+      DATA_SOURCE_USER: immich
+      DATA_SOURCE_PASS: ${IMMICH_DB_PASSWORD}
+    ports:
+      - "9187:9187"
+    depends_on:
+      - database
