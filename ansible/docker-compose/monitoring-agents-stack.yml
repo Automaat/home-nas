@@ -1,8 +1,9 @@
 ---
 # Per-host monitoring agents running on every docker host.
-# Exposes container-level metrics on :9101 for homelab Prometheus to scrape.
+# Exposes container-level metrics on :9101 for homelab Prometheus to scrape
+# and ships docker/journal logs to homelab Loki via promtail.
 #
-# Phase 3 of home-nas → smart-home monitoring integration.
+# Phases 3 + 5 of home-nas → smart-home monitoring integration.
 
 services:
   cadvisor:
@@ -25,3 +26,17 @@ services:
       - --docker_only=true
       - --store_container_labels=false
       - --whitelisted_container_labels=io.kubernetes.container.name,io.kubernetes.pod.name,com.docker.compose.project,com.docker.compose.service
+
+  promtail:
+    image: grafana/promtail:3.6.6
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/promtail:/var/lib/promtail
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    command:
+      - -config.file=/etc/promtail/config.yml
