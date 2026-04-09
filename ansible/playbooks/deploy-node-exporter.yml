@@ -1,0 +1,41 @@
+---
+# Deploy prometheus-node-exporter to Proxmox host + all LXCs/VMs except desktop.
+# Exposes :9100 for scraping by homelab Prometheus (192.168.0.241).
+#
+# Phase 2 of home-nas → smart-home monitoring integration.
+# Phase 1 (firewall/loki rebind on homelab) must be deployed first.
+
+- name: Deploy node_exporter to home-nas hosts
+  hosts: proxmox_hosts:lxc_containers:custom_workloads
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install prometheus-node-exporter
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure node_exporter is running and enabled
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: true
+
+    - name: Wait for node_exporter to listen on 9100
+      ansible.builtin.wait_for:
+        host: 0.0.0.0
+        port: 9100
+        timeout: 10
+
+    - name: Verify /metrics endpoint responds
+      ansible.builtin.uri:
+        url: http://localhost:9100/metrics
+        status_code: 200
+        return_content: false
+      register: node_exporter_check
+      retries: 3
+      delay: 2
+      until: node_exporter_check.status == 200
