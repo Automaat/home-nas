@@ -51,6 +51,17 @@ services:
       test: redis-cli ping || exit 1
     restart: unless-stopped
 
+  immich-redis-exporter:
+    container_name: immich-redis-exporter
+    image: oliver006/redis_exporter:v1.82.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://immich-redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+
   database:
     container_name: immich-postgres
     image: >-

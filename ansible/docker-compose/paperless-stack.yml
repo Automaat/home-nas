@@ -28,6 +28,18 @@ services:
       timeout: 5s
       retries: 5
 
+  paperless-redis-exporter:
+    container_name: paperless-redis-exporter
+    image: oliver006/redis_exporter:v1.82.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://paperless-redis:6379"
+    ports:
+      - "9122:9121"  # 9121 taken by nextcloud-redis-exporter on same host
+    depends_on:
+      paperless-broker:
+        condition: service_healthy
+
   paperless-postgres-exporter:
     container_name: paperless-postgres-exporter
     image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1

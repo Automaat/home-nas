@@ -25,6 +25,18 @@ services:
     healthcheck:
       test: redis-cli ping || exit 1
 
+  nextcloud-redis-exporter:
+    container_name: nextcloud-redis-exporter
+    image: oliver006/redis_exporter:v1.82.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://nextcloud-redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      nextcloud-redis:
+        condition: service_healthy
+
   nextcloud-postgres-exporter:
     container_name: nextcloud-postgres-exporter
     image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
