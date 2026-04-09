@@ -45,7 +45,9 @@ services:
     restart: unless-stopped
 
   qbittorrent-exporter:
-    image: ghcr.io/esanchezm/prometheus-qbittorrent-exporter:1.6.0
+    # Upstream publishes only `latest` and sha-based tags on Docker Hub;
+    # no semver tags despite the GitHub release naming scheme.
+    image: esanchezm/prometheus-qbittorrent-exporter:latest
     container_name: qbittorrent-exporter
     network_mode: host
     environment:
