@@ -1,0 +1,48 @@
+---
+- name: Create synapse LXC container
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: 192.168.0.101
+    ct_id: 114
+    ct_hostname: synapse
+    ct_memory: 16384
+    ct_cores: 6
+    ct_storage: tank-vms
+    ct_rootfs_size: 64
+    template: ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+
+  tasks:
+    - name: Create LXC container
+      ansible.builtin.command:
+        cmd: >
+          ssh root@{{ proxmox_host }} pct create {{ ct_id }}
+          local:vztmpl/{{ template }}
+          --hostname {{ ct_hostname }}
+          --memory {{ ct_memory }}
+          --cores {{ ct_cores }}
+          --storage {{ ct_storage }}
+          --rootfs {{ ct_storage }}:{{ ct_rootfs_size }}
+          --net0 name=eth0,bridge=vmbr0,tag=20,ip=192.168.20.219/24,gw=192.168.20.1
+          --unprivileged 1
+          --features nesting=1
+          --onboot 1
+      register: create_result
+      failed_when:
+        - create_result.rc != 0
+        - "'already exists' not in create_result.stderr"
+      changed_when: create_result.rc == 0
+
+    - name: Start container
+      ansible.builtin.command:
+        cmd: ssh root@{{ proxmox_host }} pct start {{ ct_id }}
+      register: start_result
+      failed_when:
+        - start_result.rc != 0
+        - "'already running' not in start_result.stderr"
+      changed_when: start_result.rc == 0
+
+    - name: Wait for container to boot
+      ansible.builtin.wait_for:
+        timeout: 15
+      delegate_to: localhost

@@ -59,6 +59,12 @@ http:
       entryPoints: [web]
       middlewares: [internal-whitelist]
 
+    synapse:
+      rule: "Host(`synapse.mskalski.dev`)"
+      service: synapse
+      entryPoints: [web]
+      middlewares: [internal-whitelist]
+
   services:
     jellyfin:
       loadBalancer:
@@ -109,6 +115,11 @@ http:
       loadBalancer:
         servers:
           - url: "http://192.168.20.191:5000"
+
+    synapse:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.219:8080"
 
   middlewares:
     internal-whitelist:
