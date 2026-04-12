@@ -2,6 +2,19 @@
 
 Proxmox home NAS with Ubuntu VMs and Docker containers, managed via Infrastructure as Code.
 
+## Home Lab Documentation
+
+Architecture decisions, service inventory, network topology, and monitoring design are in the local `home-lab-doc` repo at `../home-lab-doc`. Always read from local path — do not query git.
+
+Key references:
+- `../home-lab-doc/architecture/overview.md` — host topology, logical diagram
+- `../home-lab-doc/architecture/network.md` — VLANs, IPs, firewall
+- `../home-lab-doc/services/inventory.md` — all services, ports, containers per host
+- `../home-lab-doc/monitoring/prometheus-targets.md` — Prometheus scrape jobs (keep in sync)
+- `../home-lab-doc/adr/` — architecture decision records
+
+When adding new services or exporters, update `../home-lab-doc` accordingly.
+
 **Components:**
 
 - **Terraform/OpenTofu**: Proxmox VM provisioning (main.tf, storage.tf)
