@@ -1,0 +1,73 @@
+name: Deploy (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: Stack to deploy
+        type: choice
+        required: true
+        options:
+          - infrastructure
+          - media-management
+          - jellyfin
+          - immich
+          - nextcloud
+          - paperless
+          - synapse
+          - finance-buddy
+          - downloads
+          - monitoring-agents
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, home-nas]
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v6
+
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/cache@v5
+        with:
+          path: ~/.ansible/collections
+          key: ${{ runner.os }}-ansible-collections-${{ hashFiles('ansible/requirements.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-ansible-collections-
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Resolve playbook + limit
+        id: map
+        run: |
+          case "${{ inputs.stack }}" in
+            infrastructure)     pb=deploy-infrastructure-stack.yml; lim=infrastructure ;;
+            media-management)   pb=deploy-media-management.yml;     lim=media-management ;;
+            jellyfin)           pb=deploy-media-stack.yml;          lim=jellyfin ;;
+            immich)             pb=deploy-immich.yml;               lim=jellyfin ;;
+            nextcloud)          pb=deploy-nextcloud.yml;            lim=custom-workloads ;;
+            paperless)          pb=deploy-paperless.yml;            lim=custom-workloads ;;
+            synapse)            pb=deploy-synapse.yml;              lim=synapse ;;
+            finance-buddy)      pb=deploy-finance-buddy.yml;        lim=pet-projects ;;
+            downloads)          pb=deploy-downloads.yml;            lim=downloads ;;
+            monitoring-agents)  pb=deploy-monitoring-agents.yml;    lim=all ;;
+            *) echo "Unknown stack: ${{ inputs.stack }}"; exit 1 ;;
+          esac
+          {
+            echo "playbook=$pb"
+            echo "limit=$lim"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run playbook
+        working-directory: ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: ansible-playbook -i inventory.yml playbooks/${{ steps.map.outputs.playbook }} --limit ${{ steps.map.outputs.limit }}
