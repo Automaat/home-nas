@@ -35,21 +35,4 @@ variable "custom_workloads_memory" {
   default     = 28672
 }
 
-variable "desktop_cores" {
-  description = "Number of CPU cores for desktop VM"
-  type        = number
-  default     = 4
-}
-
-variable "desktop_memory" {
-  description = "Memory in MB for desktop VM"
-  type        = number
-  default     = 8192
-}
-
-variable "ssh_public_key" {
-  description = "SSH public key for VM cloud-init user accounts"
-  type        = string
-  default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJx8wg+9mULtkH3ZgSIoF/GWaIIUNHslkWeo0bukAwuT skalskimarcin33@gmail.com"
-}
-
+# Desktop VM variables removed (replaced by synapse LXC 114)

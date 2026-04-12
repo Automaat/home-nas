@@ -21,12 +21,7 @@ all:
               ansible_python_interpreter: /usr/bin/python3
 
         desktop_vms:
-          hosts:
-            desktop:
-              ansible_host: 192.168.20.107
-              ansible_user: root
-              ansible_python_interpreter: /usr/bin/python3
-              # Ubuntu desktop with GNOME + xRDP (VM ID 103, VLAN 20)
+          hosts: {}  # VM decommissioned, replaced by synapse LXC 114
 
     lxc_containers:
       children:
@@ -74,3 +69,12 @@ all:
               ansible_python_interpreter: /usr/bin/python3
               ct_id: 113
               # VLAN 20 - pet project apps (finance-buddy, etc.)
+
+        synapse_lxc:
+          hosts:
+            synapse:
+              ansible_host: 192.168.20.219
+              ansible_user: root
+              ansible_python_interpreter: /usr/bin/python3
+              ct_id: 114
+              # VLAN 20 - Synapse agent orchestrator

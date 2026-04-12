@@ -1,0 +1,30 @@
+---
+services:
+  synapse:
+    container_name: synapse
+    image: ghcr.io/automaat/synapse:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /data/synapse/home:/root/.synapse
+      - /data/synapse/claude:/root/.claude
+      - /data/synapse/codex:/root/.codex
+    environment:
+      SYNAPSE_PORT: "8080"
+      SYNAPSE_STATIC_DIR: /app/web
+    deploy:
+      resources:
+        limits:
+          memory: 14G
+        reservations:
+          memory: 2G
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -sf http://localhost:8080/health || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
