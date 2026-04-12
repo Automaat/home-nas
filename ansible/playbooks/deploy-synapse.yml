@@ -60,7 +60,8 @@
       become: false
 
     - name: Verify container is running
-      community.docker.docker_container_info:
-        name: synapse
-      register: container_info
-      failed_when: not container_info.exists or container_info.container.State.Status != 'running'
+      ansible.builtin.shell:
+        cmd: docker ps --filter name=^synapse$ --filter status=running --format '{% raw %}{{.Names}}{% endraw %}'
+      register: container_status
+      changed_when: false
+      failed_when: container_status.stdout_lines | length == 0
