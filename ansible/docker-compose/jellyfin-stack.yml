@@ -34,7 +34,7 @@ services:
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama:0.20.3-rocm
+    image: ollama/ollama:0.20.5-rocm
     container_name: ollama
     devices:
       - /dev/dri:/dev/dri  # AMD GPU for inference
@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
 
   navidrome:
-    image: deluan/navidrome:0.61.1
+    image: deluan/navidrome:0.61.2
     container_name: navidrome
     environment:
       - ND_MUSICFOLDER=/music
