@@ -1,8 +1,10 @@
 keys:
   - &proxmox age1kfklkd3xuacvfu0gy35v7cwk5lw8y9xv0lr5hs2ddyn82ww9mdlslfth6h
+  - &gh_runner_home_nas age1m93z5utm44xwlvr402n09n27nlywstvft87zzysn3xvf3hkqxa5qh607ah
 
 creation_rules:
   - path_regex: ansible/secrets/.*\.yaml$
     key_groups:
       - age:
           - *proxmox
+          - *gh_runner_home_nas

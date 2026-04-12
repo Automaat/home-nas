@@ -1,0 +1,134 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: Stack to deploy
+        type: choice
+        required: true
+        options:
+          - infrastructure
+          - media-management
+          - jellyfin
+          - immich
+          - nextcloud
+          - paperless
+          - synapse
+          - finance-buddy
+          - downloads
+          - monitoring-agents
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+
+  changes:
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      stacks: ${{ steps.filter.outputs.changes }}
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            infrastructure:
+              - 'ansible/docker-compose/infrastructure-stack.yml'
+              - 'ansible/docker-compose/traefik/**'
+              - 'ansible/playbooks/deploy-infrastructure-stack.yml'
+            media-management:
+              - 'ansible/docker-compose/media-management-stack.yml'
+              - 'ansible/playbooks/deploy-media-management.yml'
+            jellyfin:
+              - 'ansible/docker-compose/jellyfin-stack.yml'
+              - 'ansible/playbooks/deploy-media-stack.yml'
+            immich:
+              - 'ansible/docker-compose/immich-stack.yml'
+              - 'ansible/playbooks/deploy-immich.yml'
+            nextcloud:
+              - 'ansible/docker-compose/nextcloud-stack.yml'
+              - 'ansible/playbooks/deploy-nextcloud.yml'
+            paperless:
+              - 'ansible/docker-compose/paperless-stack.yml'
+              - 'ansible/playbooks/deploy-paperless.yml'
+            synapse:
+              - 'ansible/docker-compose/synapse-stack.yml'
+              - 'ansible/playbooks/deploy-synapse.yml'
+            finance-buddy:
+              - 'ansible/docker-compose/finance-buddy-stack.yml'
+              - 'ansible/playbooks/deploy-finance-buddy.yml'
+            downloads:
+              - 'ansible/docker-compose/downloads-stack.yml'
+              - 'ansible/playbooks/deploy-downloads.yml'
+            monitoring-agents:
+              - 'ansible/docker-compose/monitoring-agents-stack.yml'
+              - 'ansible/playbooks/deploy-monitoring-agents.yml'
+
+  deploy:
+    needs: [validate, changes]
+    if: |
+      always() && needs.validate.result == 'success' &&
+      ((github.event_name == 'push' && needs.changes.result == 'success' && needs.changes.outputs.stacks != '[]')
+       || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, home-nas]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        stack: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', github.event.inputs.stack)) || fromJson(needs.changes.outputs.stacks) }}
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v6
+
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/cache@v5
+        with:
+          path: ~/.ansible/collections
+          key: ${{ runner.os }}-ansible-collections-${{ hashFiles('ansible/requirements.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-ansible-collections-
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Resolve playbook + limit
+        id: map
+        run: |
+          case "${{ matrix.stack }}" in
+            infrastructure)     pb=deploy-infrastructure-stack.yml; lim=infrastructure ;;
+            media-management)   pb=deploy-media-management.yml;     lim=media-management ;;
+            jellyfin)           pb=deploy-media-stack.yml;          lim=jellyfin ;;
+            immich)             pb=deploy-immich.yml;               lim=jellyfin ;;
+            nextcloud)          pb=deploy-nextcloud.yml;            lim=custom-workloads ;;
+            paperless)          pb=deploy-paperless.yml;            lim=custom-workloads ;;
+            synapse)            pb=deploy-synapse.yml;              lim=synapse ;;
+            finance-buddy)      pb=deploy-finance-buddy.yml;        lim=pet-projects ;;
+            downloads)          pb=deploy-downloads.yml;            lim=downloads ;;
+            monitoring-agents)  pb=deploy-monitoring-agents.yml;    lim=all ;;
+            *) echo "Unknown stack: ${{ matrix.stack }}"; exit 1 ;;
+          esac
+          {
+            echo "playbook=$pb"
+            echo "limit=$lim"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run playbook
+        working-directory: ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: ansible-playbook -i inventory.yml playbooks/${{ steps.map.outputs.playbook }} --limit ${{ steps.map.outputs.limit }}
