@@ -1,7 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":dependencyDashboard"
   ],
   "docker-compose": {
     "fileMatch": ["ansible/docker-compose/.*\\.yml$"]
@@ -11,5 +12,54 @@
   },
   "terraform": {
     "enabled": true
-  }
+  },
+  "packageRules": [
+    {
+      "matchFileNames": [
+        "ansible/docker-compose/infrastructure-stack.yml",
+        "ansible/docker-compose/traefik/**"
+      ],
+      "groupName": "infrastructure stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/media-management-stack.yml"],
+      "groupName": "media-management stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/jellyfin-stack.yml"],
+      "groupName": "jellyfin stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/immich-stack.yml"],
+      "groupName": "immich stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/nextcloud-stack.yml"],
+      "groupName": "nextcloud stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/paperless-stack.yml"],
+      "groupName": "paperless stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/synapse-stack.yml"],
+      "groupName": "synapse stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/finance-buddy-stack.yml"],
+      "groupName": "finance-buddy stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/downloads-stack.yml"],
+      "groupName": "downloads stack"
+    },
+    {
+      "matchFileNames": ["ansible/docker-compose/monitoring-agents-stack.yml"],
+      "groupName": "monitoring-agents stack"
+    },
+    {
+      "matchManagers": ["terraform"],
+      "groupName": "terraform providers"
+    }
+  ]
 }

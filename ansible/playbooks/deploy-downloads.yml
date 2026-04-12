@@ -1,0 +1,33 @@
+---
+- name: Deploy downloads (qBittorrent) stack to downloads LXC
+  hosts: downloads
+  become: true
+
+  vars:
+    compose_dir: /opt/downloads-stack
+    compose_file: /opt/downloads-stack/docker-compose.yml
+
+  tasks:
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create compose directory
+      ansible.builtin.file:
+        path: "{{ compose_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/downloads-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Deploy downloads stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ compose_dir }}"
+        state: present
+        pull: missing
