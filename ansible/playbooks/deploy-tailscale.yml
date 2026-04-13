@@ -1,0 +1,126 @@
+---
+# Deploy Tailscale subnet router on Proxmox host.
+# Exposes home-lab LAN (VLANs 10/20/40 + mgmt) to tailnet as single node
+# "klaudiusz-smart-home". Advertised routes must be approved once in the
+# Tailscale admin console (Machines -> klaudiusz-smart-home -> Edit route settings).
+
+- name: Deploy Tailscale subnet router
+  hosts: proxmox
+  become: true
+  gather_facts: true
+
+  vars:
+    tailscale_hostname: klaudiusz-smart-home
+    tailscale_routes:
+      - 192.168.0.0/24
+      - 192.168.10.0/24
+      - 192.168.20.0/24
+      - 192.168.40.0/24
+    tailscale_apt_base: https://pkgs.tailscale.com/stable/debian
+
+  handlers:
+    - name: Refresh apt cache
+      ansible.builtin.apt:
+        update_cache: true
+
+  tasks:
+    - name: Enable IPv4 forwarding
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: true
+        state: present
+        reload: true
+
+    - name: Enable IPv6 forwarding
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.all.forwarding
+        value: '1'
+        sysctl_set: true
+        state: present
+        reload: true
+
+    - name: Add Tailscale apt signing key
+      ansible.builtin.get_url:
+        url: "{{ tailscale_apt_base }}/{{ ansible_facts['distribution_release'] }}.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: '0644'
+        owner: root
+        group: root
+      notify: Refresh apt cache
+
+    - name: Add Tailscale apt repository
+      ansible.builtin.get_url:
+        url: "{{ tailscale_apt_base }}/{{ ansible_facts['distribution_release'] }}.tailscale-keyring.list"
+        dest: /etc/apt/sources.list.d/tailscale.list
+        mode: '0644'
+        owner: root
+        group: root
+      notify: Refresh apt cache
+
+    - name: Flush handlers before install
+      ansible.builtin.meta: flush_handlers
+
+    - name: Install Tailscale
+      ansible.builtin.apt:
+        name: tailscale
+        state: present
+        cache_valid_time: 3600
+
+    - name: Ensure tailscaled is running and enabled
+      ansible.builtin.systemd:
+        name: tailscaled
+        state: started
+        enabled: true
+
+    - name: Extract Tailscale auth key from sops
+      ansible.builtin.command: >
+        sops -d --extract '["tailscale_authkey"]'
+        {{ playbook_dir }}/../secrets/secrets.yaml
+      register: ts_authkey_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Check current Tailscale backend state
+      ansible.builtin.command: tailscale status --json
+      register: ts_status
+      changed_when: false
+      failed_when: false
+
+    - name: Parse Tailscale backend state
+      ansible.builtin.set_fact:
+        ts_backend_state: >-
+          {{ (ts_status.stdout | from_json).BackendState
+             if ts_status.rc == 0 and ts_status.stdout | length > 0
+             else 'NoState' }}
+
+    - name: Bring up Tailscale (first-time auth)
+      ansible.builtin.command: >
+        tailscale up
+        --authkey={{ ts_authkey_result.stdout }}
+        --hostname={{ tailscale_hostname }}
+        --advertise-routes={{ tailscale_routes | join(',') }}
+        --accept-dns=false
+      when: ts_backend_state != 'Running'
+      no_log: true
+      changed_when: true
+
+    - name: Update Tailscale settings (when already running)
+      ansible.builtin.command: >
+        tailscale set
+        --hostname={{ tailscale_hostname }}
+        --advertise-routes={{ tailscale_routes | join(',') }}
+        --accept-dns=false
+      when: ts_backend_state == 'Running'
+      changed_when: false
+
+    - name: Get final Tailscale status
+      ansible.builtin.command: tailscale status
+      register: ts_status_final
+      changed_when: false
+
+    - name: Display Tailscale status
+      ansible.builtin.debug:
+        var: ts_status_final.stdout_lines

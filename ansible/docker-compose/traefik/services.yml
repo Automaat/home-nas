@@ -4,66 +4,90 @@ http:
     jellyfin:
       rule: "Host(`jellyfin.mskalski.dev`)"
       service: jellyfin
-      entryPoints: [web]
+      entryPoints: [web, websecure]
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.mskalski.dev"
 
     jellyseerr:
       rule: "Host(`jellyseerr.mskalski.dev`)"
       service: jellyseerr
-      entryPoints: [web]
+      entryPoints: [web, websecure]
+      tls:
+        certResolver: cloudflare
 
     sonarr:
       rule: "Host(`sonarr.mskalski.dev`)"
       service: sonarr
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     radarr:
       rule: "Host(`radarr.mskalski.dev`)"
       service: radarr
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     prowlarr:
       rule: "Host(`prowlarr.mskalski.dev`)"
       service: prowlarr
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     immich:
       rule: "Host(`immich.mskalski.dev`)"
       service: immich
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     paperless:
       rule: "Host(`paperless.mskalski.dev`)"
       service: paperless
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     nextcloud:
       rule: "Host(`nextcloud.mskalski.dev`)"
       service: nextcloud
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     mixarr:
       rule: "Host(`mixarr.mskalski.dev`)"
       service: mixarr
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     lidify:
       rule: "Host(`lidify.mskalski.dev`)"
       service: lidify
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
     synapse:
       rule: "Host(`synapse.mskalski.dev`)"
       service: synapse
-      entryPoints: [web]
+      entryPoints: [web, websecure]
       middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
 
   services:
     jellyfin:
@@ -127,3 +151,4 @@ http:
         sourceRange:
           - "192.168.0.0/16"
           - "172.16.0.0/12"  # Cloudflare Tunnel connector
+          - "100.64.0.0/10"  # Tailscale CGNAT

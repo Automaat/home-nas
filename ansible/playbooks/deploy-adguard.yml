@@ -1,0 +1,185 @@
+---
+# Deploy AdGuard Home on infrastructure LXC.
+# Provides network-wide DNS + ad-blocking + split-horizon rewrites so
+# *.mskalski.dev resolves to the internal Traefik IP (192.168.10.222)
+# for on-LAN and tailnet clients, while public DNS still routes external
+# requests through the Cloudflared tunnel.
+#
+# Manual follow-ups after first run:
+#   1. UDM Pro: Settings -> Networks -> [each VLAN] -> Advanced -> DHCP Service
+#      -> DNS Server -> 192.168.10.222
+#   2. Tailscale Admin -> DNS -> Nameservers -> Custom -> 192.168.10.222,
+#      restrict to domain mskalski.dev (Split DNS)
+
+- name: Deploy AdGuard Home DNS + ad-blocker
+  hosts: infrastructure
+  become: true
+
+  vars:
+    compose_file: /opt/adguard/docker-compose.yml
+    adguard_config_dir: /opt/adguard/conf
+    adguard_work_dir: /opt/adguard/work
+    traefik_lan_ip: 192.168.10.222
+    adguard_dns_rewrites:
+      - domain: jellyfin.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: jellyseerr.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: sonarr.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: radarr.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: prowlarr.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: immich.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: paperless.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: nextcloud.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: mixarr.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: lidify.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: synapse.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+
+  handlers:
+    - name: Restart systemd-resolved
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: restarted
+
+    - name: Restart AdGuard Home
+      community.docker.docker_container:
+        name: adguardhome
+        state: started
+        restart: true
+
+  tasks:
+    - name: Ensure Docker is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Ensure AdGuard directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/adguard
+        - "{{ adguard_config_dir }}"
+        - "{{ adguard_work_dir }}"
+
+    - name: Ensure systemd-resolved drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Disable systemd-resolved stub listener (frees :53)
+      ansible.builtin.copy:
+        content: |
+          [Resolve]
+          DNSStubListener=no
+        dest: /etc/systemd/resolved.conf.d/99-disable-stub.conf
+        mode: '0644'
+        owner: root
+        group: root
+      notify: Restart systemd-resolved
+
+    - name: Flush handlers so :53 is free before docker bind
+      ansible.builtin.meta: flush_handlers
+
+    - name: Extract AdGuard admin user from sops
+      ansible.builtin.command: >
+        sops -d --extract '["adguard_admin_user"]'
+        {{ playbook_dir }}/../secrets/secrets.yaml
+      register: adguard_user_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Extract AdGuard admin password from sops
+      ansible.builtin.command: >
+        sops -d --extract '["adguard_admin_password"]'
+        {{ playbook_dir }}/../secrets/secrets.yaml
+      register: adguard_password_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set AdGuard credential facts
+      ansible.builtin.set_fact:
+        adguard_admin_user: "{{ adguard_user_result.stdout }}"
+        adguard_admin_password: "{{ adguard_password_result.stdout }}"
+      no_log: true
+
+    - name: Generate bcrypt hash of AdGuard admin password
+      ansible.builtin.command:
+        cmd: >-
+          python3 -c "import sys, bcrypt;
+          pw=sys.stdin.buffer.read().rstrip(b'\n')[:72];
+          print(bcrypt.hashpw(pw, bcrypt.gensalt(10)).decode())"
+        stdin: "{{ adguard_admin_password }}"
+      register: adguard_pw_hash_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set AdGuard password hash fact
+      ansible.builtin.set_fact:
+        adguard_admin_password_hash: "{{ adguard_pw_hash_result.stdout }}"
+      no_log: true
+
+    - name: Render AdGuard Home config
+      ansible.builtin.template:
+        src: templates/AdGuardHome.yaml.j2
+        dest: "{{ adguard_config_dir }}/AdGuardHome.yaml"
+        mode: '0600'
+        owner: root
+        group: root
+      no_log: true
+      notify: Restart AdGuard Home
+
+    - name: Copy AdGuard docker-compose file
+      ansible.builtin.copy:
+        src: ../docker-compose/adguard-stack.yml
+        dest: "{{ compose_file }}"
+        mode: '0644'
+
+    - name: Deploy AdGuard stack
+      community.docker.docker_compose_v2:
+        project_src: /opt/adguard
+        state: present
+        pull: always
+
+    - name: Flush handlers so config changes take effect before verify
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify AdGuard is running
+      community.docker.docker_container_info:
+        name: adguardhome
+      register: adguard_info
+      failed_when:
+        - not adguard_info.exists
+        - adguard_info.container.State.Status != 'running'
+
+    - name: Wait for AdGuard DNS port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 53
+        timeout: 30
+
+    - name: Wait for AdGuard web UI
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 3000
+        timeout: 30

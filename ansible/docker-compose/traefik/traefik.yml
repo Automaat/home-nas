@@ -23,6 +23,17 @@ providers:
     filename: /etc/traefik/services.yml
     watch: true
 
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: skalskimarcin33@gmail.com
+      storage: /etc/traefik/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - 1.1.1.1:53
+          - 8.8.8.8:53
+
 log:
   level: INFO
 
