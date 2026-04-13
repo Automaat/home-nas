@@ -55,6 +55,14 @@
         owner: "0"
         group: "0"
 
+    - name: Install global CLAUDE.md
+      ansible.builtin.copy:
+        src: synapse/claude/CLAUDE.md
+        dest: "{{ data_root }}/synapse/claude/CLAUDE.md"
+        mode: '0644'
+        owner: "0"
+        group: "0"
+
     - name: Install Codex config with hooks feature flag
       ansible.builtin.copy:
         src: synapse/codex/config.toml
@@ -68,6 +76,14 @@
       ansible.builtin.copy:
         src: synapse/codex/hooks.json
         dest: "{{ data_root }}/synapse/codex/hooks.json"
+        mode: '0644'
+        owner: "0"
+        group: "0"
+
+    - name: Install global AGENTS.md
+      ansible.builtin.copy:
+        src: synapse/codex/AGENTS.md
+        dest: "{{ data_root }}/synapse/codex/AGENTS.md"
         mode: '0644'
         owner: "0"
         group: "0"
