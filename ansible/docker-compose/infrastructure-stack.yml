@@ -8,9 +8,12 @@ services:
       - "80:80"
       - "443:443"
       - "8080:8080"  # Dashboard (internal only)
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
     volumes:
       - /opt/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - /opt/traefik/config/services.yml:/etc/traefik/services.yml:ro
+      - /opt/traefik/acme.json:/etc/traefik/acme.json
       - /var/log/traefik:/var/log/traefik
     networks:
       - infrastructure
