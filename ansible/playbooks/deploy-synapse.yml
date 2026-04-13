@@ -7,6 +7,11 @@
     data_root: /data
     compose_file: /opt/synapse/docker-compose.yml
 
+  handlers:
+    - name: Restart synapse
+      ansible.builtin.command: docker restart synapse
+      changed_when: true
+
   tasks:
     - name: Install Docker and dependencies
       ansible.builtin.apt:
@@ -87,6 +92,16 @@
         mode: '0644'
         owner: "0"
         group: "0"
+
+    - name: Enable Prometheus metrics in synapse config
+      ansible.builtin.blockinfile:
+        path: "{{ data_root }}/synapse/home/config.yaml"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - metrics"
+        block: |
+          metrics:
+              enabled: true
+        create: false
+      notify: Restart synapse
 
     - name: Deploy synapse stack
       community.docker.docker_compose_v2:
