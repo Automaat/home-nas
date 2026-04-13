@@ -88,9 +88,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ansible-collections-
 
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r ansible/requirements.yml
 

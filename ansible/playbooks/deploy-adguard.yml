@@ -105,11 +105,11 @@
       no_log: true
       changed_when: false
 
-    - name: Extract AdGuard admin password from sops
+    - name: Extract AdGuard admin password hash from sops
       ansible.builtin.command: >
-        sops -d --extract '["adguard_admin_password"]'
+        sops -d --extract '["adguard_admin_password_hash"]'
         {{ playbook_dir }}/../secrets/secrets.yaml
-      register: adguard_password_result
+      register: adguard_pw_hash_result
       delegate_to: localhost
       become: false
       no_log: true
@@ -118,24 +118,6 @@
     - name: Set AdGuard credential facts
       ansible.builtin.set_fact:
         adguard_admin_user: "{{ adguard_user_result.stdout }}"
-        adguard_admin_password: "{{ adguard_password_result.stdout }}"
-      no_log: true
-
-    - name: Generate bcrypt hash of AdGuard admin password
-      ansible.builtin.command:
-        cmd: >-
-          python3 -c "import sys, bcrypt;
-          pw=sys.stdin.buffer.read().rstrip(b'\n')[:72];
-          print(bcrypt.hashpw(pw, bcrypt.gensalt(10)).decode())"
-        stdin: "{{ adguard_admin_password }}"
-      register: adguard_pw_hash_result
-      delegate_to: localhost
-      become: false
-      no_log: true
-      changed_when: false
-
-    - name: Set AdGuard password hash fact
-      ansible.builtin.set_fact:
         adguard_admin_password_hash: "{{ adguard_pw_hash_result.stdout }}"
       no_log: true
 
