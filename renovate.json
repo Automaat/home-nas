@@ -43,7 +43,8 @@
     },
     {
       "matchFileNames": ["ansible/docker-compose/synapse-stack.yml"],
-      "groupName": "synapse stack"
+      "groupName": "synapse stack",
+      "automerge": true
     },
     {
       "matchFileNames": ["ansible/docker-compose/finance-buddy-stack.yml"],
