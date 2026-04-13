@@ -57,6 +57,7 @@ jobs:
             synapse:
               - 'ansible/docker-compose/synapse-stack.yml'
               - 'ansible/playbooks/deploy-synapse.yml'
+              - 'ansible/playbooks/files/synapse/**'
             finance-buddy:
               - 'ansible/docker-compose/finance-buddy-stack.yml'
               - 'ansible/playbooks/deploy-finance-buddy.yml'
