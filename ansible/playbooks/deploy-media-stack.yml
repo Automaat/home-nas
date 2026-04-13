@@ -23,14 +23,13 @@
         enabled: true
 
     # data_root is a VirtioFS mount from the proxmox host's ZFS dataset.
-    # chown is not permitted across the virtiofs boundary, so we only
-    # ensure directories exist with a safe mode; ownership is fixed on
-    # the host side.
+    # chown/chmod across the virtiofs boundary returns EPERM, so we use
+    # `mkdir -p` with `creates:` — the command is skipped entirely if the
+    # dir already exists and never touches its mode or ownership.
     - name: Create data directories
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        mode: '0755'
+      ansible.builtin.command:
+        cmd: "mkdir -p {{ item }}"
+        creates: "{{ item }}"
       loop:
         - "{{ data_root }}"
         - "{{ data_root }}/jellyfin/config"
