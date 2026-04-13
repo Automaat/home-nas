@@ -49,7 +49,7 @@
 
     - name: Install klaudiush hooks for Claude Code
       ansible.builtin.copy:
-        src: ../files/synapse/claude/settings.json
+        src: synapse/claude/settings.json
         dest: "{{ data_root }}/synapse/claude/settings.json"
         mode: '0644'
         owner: "0"
@@ -57,7 +57,7 @@
 
     - name: Install Codex config with hooks feature flag
       ansible.builtin.copy:
-        src: ../files/synapse/codex/config.toml
+        src: synapse/codex/config.toml
         dest: "{{ data_root }}/synapse/codex/config.toml"
         mode: '0644'
         owner: "0"
@@ -66,7 +66,7 @@
 
     - name: Install klaudiush hooks for Codex
       ansible.builtin.copy:
-        src: ../files/synapse/codex/hooks.json
+        src: synapse/codex/hooks.json
         dest: "{{ data_root }}/synapse/codex/hooks.json"
         mode: '0644'
         owner: "0"
