@@ -1,7 +1,7 @@
 ---
 services:
   adguardhome:
-    image: adguard/adguardhome:v0.107.66
+    image: adguard/adguardhome:v0.107.73
     container_name: adguardhome
     restart: unless-stopped
     ports:
