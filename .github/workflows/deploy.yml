@@ -35,6 +35,10 @@ jobs:
               - 'ansible/docker-compose/infrastructure-stack.yml'
               - 'ansible/docker-compose/traefik/**'
               - 'ansible/playbooks/deploy-infrastructure-stack.yml'
+            adguard:
+              - 'ansible/docker-compose/adguard-stack.yml'
+              - 'ansible/playbooks/deploy-adguard.yml'
+              - 'ansible/playbooks/templates/AdGuardHome.yaml.j2'
             media-management:
               - 'ansible/docker-compose/media-management-stack.yml'
               - 'ansible/playbooks/deploy-media-management.yml'
@@ -84,6 +88,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ansible-collections-
 
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r ansible/requirements.yml
 
@@ -92,6 +99,7 @@ jobs:
         run: |
           case "${{ matrix.stack }}" in
             infrastructure)     pb=deploy-infrastructure-stack.yml; lim=infrastructure ;;
+            adguard)            pb=deploy-adguard.yml;              lim=infrastructure ;;
             media-management)   pb=deploy-media-management.yml;     lim=media-management ;;
             jellyfin)           pb=deploy-media-stack.yml;          lim=jellyfin ;;
             immich)             pb=deploy-immich.yml;               lim=jellyfin ;;
