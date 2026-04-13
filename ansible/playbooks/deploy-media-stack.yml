@@ -22,13 +22,15 @@
         state: started
         enabled: true
 
+    # data_root is a VirtioFS mount from the proxmox host's ZFS dataset.
+    # chown is not permitted across the virtiofs boundary, so we only
+    # ensure directories exist with a safe mode; ownership is fixed on
+    # the host side.
     - name: Create data directories
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
-        owner: "1000"
-        group: "1000"
       loop:
         - "{{ data_root }}"
         - "{{ data_root }}/jellyfin/config"
