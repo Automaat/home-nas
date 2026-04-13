@@ -1,0 +1,36 @@
+{
+  "includeCoAuthoredBy": false,
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "klaudiush --hook-type Notification --trace"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "klaudiush --hook-type PreToolUse --trace"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "klaudiush --hook-type PreToolUse --trace",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

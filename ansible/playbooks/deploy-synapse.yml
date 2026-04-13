@@ -47,6 +47,31 @@
         dest: "{{ compose_file }}"
         mode: '0644'
 
+    - name: Install klaudiush hooks for Claude Code
+      ansible.builtin.copy:
+        src: synapse/claude/settings.json
+        dest: "{{ data_root }}/synapse/claude/settings.json"
+        mode: '0644'
+        owner: "0"
+        group: "0"
+
+    - name: Install Codex config with hooks feature flag
+      ansible.builtin.copy:
+        src: synapse/codex/config.toml
+        dest: "{{ data_root }}/synapse/codex/config.toml"
+        mode: '0644'
+        owner: "0"
+        group: "0"
+        force: false
+
+    - name: Install klaudiush hooks for Codex
+      ansible.builtin.copy:
+        src: synapse/codex/hooks.json
+        dest: "{{ data_root }}/synapse/codex/hooks.json"
+        mode: '0644'
+        owner: "0"
+        group: "0"
+
     - name: Deploy synapse stack
       community.docker.docker_compose_v2:
         project_src: /opt/synapse
