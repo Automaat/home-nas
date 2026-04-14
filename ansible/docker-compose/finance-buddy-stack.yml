@@ -42,7 +42,7 @@ services:
     environment:
       DATABASE_URL: postgresql://finance:${FINANCE_DB_PASSWORD}@finance-postgres:5432/finance
       APP_PASSWORD: ${FINANCE_APP_PASSWORD}
-      CORS_ORIGINS: http://localhost:3000,http://finance-app:3000,http://${HOST_IP}:3000
+      CORS_ORIGINS: http://localhost:3000,http://finance-app:3000,http://${HOST_IP}:3000,https://finance.mskalski.dev
 
   finance-app:
     container_name: finance-app
@@ -54,5 +54,5 @@ services:
       - "3000:3000"
     environment:
       PUBLIC_API_URL: http://finance-backend:8000
-      PUBLIC_API_URL_BROWSER: http://${HOST_IP}:8000
-      ORIGIN: http://${HOST_IP}:3000
+      PUBLIC_API_URL_BROWSER: https://finance-api.mskalski.dev
+      ORIGIN: https://finance.mskalski.dev

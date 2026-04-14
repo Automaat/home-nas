@@ -43,6 +43,10 @@
         answer: "{{ traefik_lan_ip }}"
       - domain: synapse.mskalski.dev
         answer: "{{ traefik_lan_ip }}"
+      - domain: finance.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
+      - domain: finance-api.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
 
   handlers:
     - name: Restart systemd-resolved

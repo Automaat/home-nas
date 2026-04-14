@@ -89,6 +89,22 @@ http:
       tls:
         certResolver: cloudflare
 
+    finance:
+      rule: "Host(`finance.mskalski.dev`)"
+      service: finance
+      entryPoints: [web, websecure]
+      middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
+
+    finance-api:
+      rule: "Host(`finance-api.mskalski.dev`)"
+      service: finance-api
+      entryPoints: [web, websecure]
+      middlewares: [internal-whitelist]
+      tls:
+        certResolver: cloudflare
+
   services:
     jellyfin:
       loadBalancer:
@@ -144,6 +160,16 @@ http:
       loadBalancer:
         servers:
           - url: "http://192.168.20.219:8080"
+
+    finance:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.106:3000"
+
+    finance-api:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.20.106:8000"
 
   middlewares:
     internal-whitelist:
