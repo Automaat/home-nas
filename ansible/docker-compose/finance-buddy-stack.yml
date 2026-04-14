@@ -32,7 +32,7 @@ services:
 
   finance-backend:
     container_name: finance-backend
-    image: ghcr.io/automaat/finance-buddy-backend:v0.0.1
+    image: ghcr.io/automaat/finance-buddy-backend:v0.1.0
     restart: unless-stopped
     depends_on:
       finance-db:
@@ -46,7 +46,7 @@ services:
 
   finance-app:
     container_name: finance-app
-    image: ghcr.io/automaat/finance-buddy-frontend:v0.0.1
+    image: ghcr.io/automaat/finance-buddy-frontend:v0.1.0
     restart: unless-stopped
     depends_on:
       - finance-backend
