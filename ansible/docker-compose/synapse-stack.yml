@@ -2,17 +2,20 @@
 services:
   synapse:
     container_name: synapse
-    image: ghcr.io/automaat/synapse:0.9.0
+    image: ghcr.io/automaat/synapse:0.11.0
     restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
-      - /data/synapse/home:/root/.synapse
-      - /data/synapse/claude:/root/.claude
-      - /data/synapse/codex:/root/.codex
+      - /data/synapse/home:/home/synapse/.synapse
+      - /data/synapse/claude:/home/synapse/.claude
+      - /data/synapse/codex:/home/synapse/.codex
     environment:
       SYNAPSE_PORT: "8080"
       SYNAPSE_STATIC_DIR: /app/web
+      GH_TOKEN: ${GH_TOKEN}
+    env_file:
+      - .env
     deploy:
       resources:
         limits:
