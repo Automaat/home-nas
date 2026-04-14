@@ -6,6 +6,9 @@
   vars:
     data_root: /data
     compose_file: /opt/synapse/docker-compose.yml
+    env_file: /opt/synapse/.env
+    synapse_uid: "1000"
+    synapse_gid: "1000"
 
   handlers:
     - name: Restart synapse
@@ -32,10 +35,22 @@
         path: "{{ item }}"
         state: directory
         mode: '0755'
-        owner: "0"
-        group: "0"
+        owner: "{{ synapse_uid }}"
+        group: "{{ synapse_gid }}"
       loop:
         - "{{ data_root }}/synapse"
+        - "{{ data_root }}/synapse/home"
+        - "{{ data_root }}/synapse/claude"
+        - "{{ data_root }}/synapse/codex"
+
+    - name: Chown synapse data tree to non-root uid (migration from root-owned layout)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        recurse: true
+        owner: "{{ synapse_uid }}"
+        group: "{{ synapse_gid }}"
+      loop:
         - "{{ data_root }}/synapse/home"
         - "{{ data_root }}/synapse/claude"
         - "{{ data_root }}/synapse/codex"
@@ -52,29 +67,53 @@
         dest: "{{ compose_file }}"
         mode: '0644'
 
+    - name: Extract GitHub token from sops
+      ansible.builtin.command: >
+        sops -d --extract '["github_token"]'
+        {{ playbook_dir }}/../secrets/secrets.yaml
+      register: gh_token_result
+      delegate_to: localhost
+      become: false
+      no_log: true
+      changed_when: false
+
+    - name: Set GitHub token fact
+      ansible.builtin.set_fact:
+        gh_token: "{{ gh_token_result.stdout }}"
+      no_log: true
+
+    - name: Create .env file with GitHub token
+      ansible.builtin.copy:
+        content: |
+          GH_TOKEN={{ gh_token }}
+        dest: "{{ env_file }}"
+        mode: '0600'
+      no_log: true
+      notify: Restart synapse
+
     - name: Install klaudiush hooks for Claude Code
       ansible.builtin.copy:
         src: synapse/claude/settings.json
         dest: "{{ data_root }}/synapse/claude/settings.json"
         mode: '0644'
-        owner: "0"
-        group: "0"
+        owner: "{{ synapse_uid }}"
+        group: "{{ synapse_gid }}"
 
     - name: Install global CLAUDE.md
       ansible.builtin.copy:
         src: synapse/claude/CLAUDE.md
         dest: "{{ data_root }}/synapse/claude/CLAUDE.md"
         mode: '0644'
-        owner: "0"
-        group: "0"
+        owner: "{{ synapse_uid }}"
+        group: "{{ synapse_gid }}"
 
     - name: Install Codex config with hooks feature flag
       ansible.builtin.copy:
         src: synapse/codex/config.toml
         dest: "{{ data_root }}/synapse/codex/config.toml"
         mode: '0644'
-        owner: "0"
-        group: "0"
+        owner: "{{ synapse_uid }}"
+        group: "{{ synapse_gid }}"
         force: false
 
     - name: Install klaudiush hooks for Codex
@@ -82,16 +121,16 @@
         src: synapse/codex/hooks.json
         dest: "{{ data_root }}/synapse/codex/hooks.json"
         mode: '0644'
-        owner: "0"
-        group: "0"
+        owner: "{{ synapse_uid }}"
+        group: "{{ synapse_gid }}"
 
     - name: Install global AGENTS.md
       ansible.builtin.copy:
         src: synapse/codex/AGENTS.md
         dest: "{{ data_root }}/synapse/codex/AGENTS.md"
         mode: '0644'
-        owner: "0"
-        group: "0"
+        owner: "{{ synapse_uid }}"
+        group: "{{ synapse_gid }}"
 
     - name: Enable Prometheus metrics in synapse config
       ansible.builtin.blockinfile:
