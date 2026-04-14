@@ -22,7 +22,7 @@
       loop:
         - /opt/infrastructure
         - /opt/traefik
-        - /opt/traefik/config
+        - /opt/traefik/dynamic
         - /var/log/traefik
 
     - name: Ensure acme.json exists with restrictive permissions
@@ -43,8 +43,13 @@
     - name: Copy Traefik dynamic config
       ansible.builtin.copy:
         src: ../docker-compose/traefik/services.yml
-        dest: /opt/traefik/config/services.yml
+        dest: /opt/traefik/dynamic/services.yml
         mode: '0644'
+
+    - name: Remove legacy Traefik config path
+      ansible.builtin.file:
+        path: /opt/traefik/config
+        state: absent
 
     - name: Copy docker-compose file
       ansible.builtin.copy:

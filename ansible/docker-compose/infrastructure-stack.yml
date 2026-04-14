@@ -12,7 +12,7 @@ services:
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
     volumes:
       - /opt/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - /opt/traefik/config/services.yml:/etc/traefik/services.yml:ro
+      - /opt/traefik/dynamic:/etc/traefik/dynamic:ro
       - /opt/traefik/acme.json:/etc/traefik/acme.json
       - /var/log/traefik:/var/log/traefik
     networks:

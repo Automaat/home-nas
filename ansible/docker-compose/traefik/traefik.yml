@@ -20,7 +20,7 @@ entryPoints:
 
 providers:
   file:
-    filename: /etc/traefik/services.yml
+    directory: /etc/traefik/dynamic
     watch: true
 
 certificatesResolvers:
