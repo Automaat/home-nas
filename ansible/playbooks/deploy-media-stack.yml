@@ -34,7 +34,6 @@
         - "{{ data_root }}"
         - "{{ data_root }}/jellyfin/config"
         - "{{ data_root }}/jellyseerr/config"
-        - "{{ data_root }}/ollama/models"
         - "{{ data_root }}/navidrome/config"
         - "{{ data_root }}/media"
         - "{{ data_root }}/media/tv"
@@ -68,5 +67,4 @@
       loop:
         - jellyfin
         - jellyseerr
-        - ollama
         - navidrome
