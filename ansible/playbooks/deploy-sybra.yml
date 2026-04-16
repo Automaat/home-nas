@@ -148,13 +148,28 @@
         create: false
       notify: Restart sybra
 
-    # The server container has 14GB RAM and 6 cores (see ansible/playbooks/
+    # A raw top-level `agent:` block in config.yaml predates this managed
+    # block (hand-edited override for require_permissions). Leaving it
+    # produces duplicate mapping keys when blockinfile appends the managed
+    # version, which breaks YAML unmarshal at container start. Strip the
+    # raw block via `before:` anchor so the managed block itself is never
+    # touched. Idempotent: after migration the regex no longer matches.
+    - name: Remove legacy unmanaged agent block (one-time migration)
+      ansible.builtin.replace:
+        path: "{{ data_root }}/sybra/home/config.yaml"
+        before: '# BEGIN ANSIBLE MANAGED BLOCK - agent'
+        regexp: '(?m)^agent:\n(?:    [^\n]+\n)+'
+        replace: ''
+
+    # The synapse LXC has 14GB RAM and 6 cores (see ansible/playbooks/
     # setup-sybra-lxc.yml). The default max_concurrent=3 was sized for a
     # laptop and caused "max concurrent agents reached (3)" errors during
-    # batch workflow runs on 2026-04-16. max_turns=100 brings the guardrail
-    # down from the default 150 after agent 70affeff burned 150 turns on a
-    # test task. log_retention_days=7 matches the rotation cadence of the
-    # rotating slog writer.
+    # batch workflow runs on 2026-04-16. max_turns=200 gives batch refactors
+    # headroom above the 150 default without letting a runaway agent chew
+    # through an unbounded context. log_retention_days=7 matches the
+    # rotating slog writer cadence. require_permissions=false preserves
+    # the prior manual override; the container is already the sandbox
+    # boundary so agents run with --dangerously-skip-permissions.
     - name: Tune agent defaults in sybra config
       ansible.builtin.blockinfile:
         path: "{{ data_root }}/sybra/home/config.yaml"
@@ -162,8 +177,9 @@
         block: |
           agent:
               max_concurrent: 10
-              max_turns: 100
+              max_turns: 200
               log_retention_days: 7
+              require_permissions: false
         create: false
       notify: Restart sybra
 
