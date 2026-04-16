@@ -1,13 +1,16 @@
-name: Deploy
+name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
 
+# Cancel in-progress runs for same PR/branch (but not deploys on main)
 concurrency:
-  group: deploy
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Restrict permissions for security
 permissions:
   contents: read
   actions: read
@@ -15,11 +18,102 @@ permissions:
   security-events: write
 
 jobs:
-  validate:
-    uses: ./.github/workflows/validate.yml
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
+      MISE_PYTHON_PRECOMPILED_FLAVOR: install_only
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v6
+
+      # Install mise for tool management
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # 4.0.1
+        with:
+          install: true
+
+      # Cache Terraform providers for faster init
+      - name: Create plugin cache dir
+        run: mkdir -p $TF_PLUGIN_CACHE_DIR
+
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/cache@v5
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      # Security scanning with Trivy
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: 'config'
+          scan-ref: 'terraform/'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      # Linting with TFLint
+      - name: Init TFLint
+        run: tflint --init
+      - name: Run TFLint
+        run: tflint --recursive --format compact
+
+      # Format and validation
+      - name: Format check
+        run: |
+          cd terraform
+          tofu fmt -check -recursive
+
+      - name: Init and validate
+        run: |
+          cd terraform
+          tofu init -backend=false
+          tofu validate
+
+  ansible:
+    runs-on: ubuntu-latest
+    env:
+      MISE_PYTHON_PRECOMPILED_FLAVOR: install_only
+    steps:
+      # Cannot pin by digest: Renovate will manage action updates
+      - uses: actions/checkout@v6
+
+      # Install mise for tool management
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # 4.0.1
+        with:
+          install: true
+
+      # Install Python dependencies
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # Install Ansible collections
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      # YAML syntax validation
+      - name: YAML Lint
+        run: yamllint ansible/
+
+      # Ansible best practices linting
+      - name: Ansible Lint
+        run: ansible-lint ansible/playbooks/
+
+      # Syntax validation
+      - name: Syntax check
+        run: |
+          cd ansible
+          for playbook in playbooks/*.yml; do
+            ansible-playbook --syntax-check "$playbook"
+          done
+
+      # Inventory validation
+      - name: Validate inventory
+        run: ansible-inventory -i ansible/inventory.yml --list > /dev/null
 
   changes:
-    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [terraform, ansible]
     runs-on: ubuntu-latest
     outputs:
       stacks: ${{ steps.filter.outputs.changes }}
@@ -54,10 +148,10 @@ jobs:
             paperless:
               - 'ansible/docker-compose/paperless-stack.yml'
               - 'ansible/playbooks/deploy-paperless.yml'
-            synapse:
-              - 'ansible/docker-compose/synapse-stack.yml'
-              - 'ansible/playbooks/deploy-synapse.yml'
-              - 'ansible/playbooks/files/synapse/**'
+            sybra:
+              - 'ansible/docker-compose/sybra-stack.yml'
+              - 'ansible/playbooks/deploy-sybra.yml'
+              - 'ansible/playbooks/files/sybra/**'
             finance-buddy:
               - 'ansible/docker-compose/finance-buddy-stack.yml'
               - 'ansible/playbooks/deploy-finance-buddy.yml'
@@ -103,7 +197,7 @@ jobs:
             immich)             pb=deploy-immich.yml;               lim=jellyfin ;;
             nextcloud)          pb=deploy-nextcloud.yml;            lim=custom-workloads ;;
             paperless)          pb=deploy-paperless.yml;            lim=custom-workloads ;;
-            synapse)            pb=deploy-synapse.yml;              lim=synapse ;;
+            sybra)              pb=deploy-sybra.yml;                lim=sybra ;;
             finance-buddy)      pb=deploy-finance-buddy.yml;        lim=pet-projects ;;
             downloads)          pb=deploy-downloads.yml;            lim=downloads ;;
             monitoring-agents)  pb=deploy-monitoring-agents.yml;    lim=all ;;
