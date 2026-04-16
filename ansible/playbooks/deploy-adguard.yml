@@ -41,7 +41,7 @@
         answer: "{{ traefik_lan_ip }}"
       - domain: lidify.mskalski.dev
         answer: "{{ traefik_lan_ip }}"
-      - domain: synapse.mskalski.dev
+      - domain: sybra.mskalski.dev
         answer: "{{ traefik_lan_ip }}"
       - domain: finance.mskalski.dev
         answer: "{{ traefik_lan_ip }}"

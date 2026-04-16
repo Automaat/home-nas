@@ -21,7 +21,7 @@ all:
               ansible_python_interpreter: /usr/bin/python3
 
         desktop_vms:
-          hosts: {}  # VM decommissioned, replaced by synapse LXC 114
+          hosts: {}  # VM decommissioned, replaced by sybra LXC 114
 
     lxc_containers:
       children:
@@ -70,11 +70,11 @@ all:
               ct_id: 113
               # VLAN 20 - pet project apps (finance-buddy, etc.)
 
-        synapse_lxc:
+        sybra_lxc:
           hosts:
-            synapse:
+            sybra:
               ansible_host: 192.168.20.219
               ansible_user: root
               ansible_python_interpreter: /usr/bin/python3
               ct_id: 114
-              # VLAN 20 - Synapse agent orchestrator
+              # VLAN 20 - Sybra agent orchestrator

@@ -1,11 +1,11 @@
 ---
-- name: Create synapse LXC container
+- name: Create sybra LXC container
   hosts: localhost
   gather_facts: false
   vars:
     proxmox_host: 192.168.0.101
     ct_id: 114
-    ct_hostname: synapse
+    ct_hostname: sybra
     ct_memory: 16384
     ct_cores: 6
     ct_storage: tank-vms
