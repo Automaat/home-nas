@@ -2,7 +2,7 @@
 services:
   sybra:
     container_name: sybra
-    image: ghcr.io/automaat/sybra:0.25.0
+    image: ghcr.io/automaat/sybra:0.26.0
     restart: unless-stopped
     ports:
       - "8080:8080"
