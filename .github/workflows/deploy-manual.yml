@@ -14,7 +14,7 @@ on:
           - immich
           - nextcloud
           - paperless
-          - synapse
+          - sybra
           - finance-buddy
           - downloads
           - monitoring-agents
@@ -55,7 +55,7 @@ jobs:
             immich)             pb=deploy-immich.yml;               lim=jellyfin ;;
             nextcloud)          pb=deploy-nextcloud.yml;            lim=custom-workloads ;;
             paperless)          pb=deploy-paperless.yml;            lim=custom-workloads ;;
-            synapse)            pb=deploy-synapse.yml;              lim=synapse ;;
+            sybra)              pb=deploy-sybra.yml;                lim=sybra ;;
             finance-buddy)      pb=deploy-finance-buddy.yml;        lim=pet-projects ;;
             downloads)          pb=deploy-downloads.yml;            lim=downloads ;;
             monitoring-agents)  pb=deploy-monitoring-agents.yml;    lim=all ;;
