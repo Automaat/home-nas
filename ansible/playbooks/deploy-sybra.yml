@@ -1,18 +1,18 @@
 ---
-- name: Deploy synapse to synapse LXC
-  hosts: synapse
+- name: Deploy sybra to sybra LXC
+  hosts: sybra
   become: true
 
   vars:
     data_root: /data
-    compose_file: /opt/synapse/docker-compose.yml
-    env_file: /opt/synapse/.env
-    synapse_uid: "1000"
-    synapse_gid: "1000"
+    compose_file: /opt/sybra/docker-compose.yml
+    env_file: /opt/sybra/.env
+    sybra_uid: "1000"
+    sybra_gid: "1000"
 
   handlers:
-    - name: Restart synapse
-      ansible.builtin.command: docker restart synapse
+    - name: Restart sybra
+      ansible.builtin.command: docker restart sybra
       changed_when: true
 
   tasks:
@@ -30,40 +30,46 @@
         state: started
         enabled: true
 
+    - name: Migrate data from /data/synapse to /data/sybra (one-time rename)
+      ansible.builtin.command: mv {{ data_root }}/synapse {{ data_root }}/sybra
+      args:
+        creates: "{{ data_root }}/sybra"
+        removes: "{{ data_root }}/synapse"
+
     - name: Create data directories
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
-        owner: "{{ synapse_uid }}"
-        group: "{{ synapse_gid }}"
+        owner: "{{ sybra_uid }}"
+        group: "{{ sybra_gid }}"
       loop:
-        - "{{ data_root }}/synapse"
-        - "{{ data_root }}/synapse/home"
-        - "{{ data_root }}/synapse/claude"
-        - "{{ data_root }}/synapse/codex"
+        - "{{ data_root }}/sybra"
+        - "{{ data_root }}/sybra/home"
+        - "{{ data_root }}/sybra/claude"
+        - "{{ data_root }}/sybra/codex"
 
-    - name: Chown synapse data tree to non-root uid (migration from root-owned layout)
+    - name: Chown sybra data tree to non-root uid (migration from root-owned layout)
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         recurse: true
-        owner: "{{ synapse_uid }}"
-        group: "{{ synapse_gid }}"
+        owner: "{{ sybra_uid }}"
+        group: "{{ sybra_gid }}"
       loop:
-        - "{{ data_root }}/synapse/home"
-        - "{{ data_root }}/synapse/claude"
-        - "{{ data_root }}/synapse/codex"
+        - "{{ data_root }}/sybra/home"
+        - "{{ data_root }}/sybra/claude"
+        - "{{ data_root }}/sybra/codex"
 
     - name: Create compose directory
       ansible.builtin.file:
-        path: /opt/synapse
+        path: /opt/sybra
         state: directory
         mode: '0755'
 
     - name: Copy docker-compose file
       ansible.builtin.copy:
-        src: ../docker-compose/synapse-stack.yml
+        src: ../docker-compose/sybra-stack.yml
         dest: "{{ compose_file }}"
         mode: '0644'
 
@@ -89,62 +95,62 @@
         dest: "{{ env_file }}"
         mode: '0600'
       no_log: true
-      notify: Restart synapse
+      notify: Restart sybra
 
     - name: Install klaudiush hooks for Claude Code
       ansible.builtin.copy:
-        src: synapse/claude/settings.json
-        dest: "{{ data_root }}/synapse/claude/settings.json"
+        src: sybra/claude/settings.json
+        dest: "{{ data_root }}/sybra/claude/settings.json"
         mode: '0644'
-        owner: "{{ synapse_uid }}"
-        group: "{{ synapse_gid }}"
+        owner: "{{ sybra_uid }}"
+        group: "{{ sybra_gid }}"
 
     - name: Install global CLAUDE.md
       ansible.builtin.copy:
-        src: synapse/claude/CLAUDE.md
-        dest: "{{ data_root }}/synapse/claude/CLAUDE.md"
+        src: sybra/claude/CLAUDE.md
+        dest: "{{ data_root }}/sybra/claude/CLAUDE.md"
         mode: '0644'
-        owner: "{{ synapse_uid }}"
-        group: "{{ synapse_gid }}"
+        owner: "{{ sybra_uid }}"
+        group: "{{ sybra_gid }}"
 
     - name: Install Codex config with hooks feature flag
       ansible.builtin.copy:
-        src: synapse/codex/config.toml
-        dest: "{{ data_root }}/synapse/codex/config.toml"
+        src: sybra/codex/config.toml
+        dest: "{{ data_root }}/sybra/codex/config.toml"
         mode: '0644'
-        owner: "{{ synapse_uid }}"
-        group: "{{ synapse_gid }}"
+        owner: "{{ sybra_uid }}"
+        group: "{{ sybra_gid }}"
         force: false
 
     - name: Install klaudiush hooks for Codex
       ansible.builtin.copy:
-        src: synapse/codex/hooks.json
-        dest: "{{ data_root }}/synapse/codex/hooks.json"
+        src: sybra/codex/hooks.json
+        dest: "{{ data_root }}/sybra/codex/hooks.json"
         mode: '0644'
-        owner: "{{ synapse_uid }}"
-        group: "{{ synapse_gid }}"
+        owner: "{{ sybra_uid }}"
+        group: "{{ sybra_gid }}"
 
     - name: Install global AGENTS.md
       ansible.builtin.copy:
-        src: synapse/codex/AGENTS.md
-        dest: "{{ data_root }}/synapse/codex/AGENTS.md"
+        src: sybra/codex/AGENTS.md
+        dest: "{{ data_root }}/sybra/codex/AGENTS.md"
         mode: '0644'
-        owner: "{{ synapse_uid }}"
-        group: "{{ synapse_gid }}"
+        owner: "{{ sybra_uid }}"
+        group: "{{ sybra_gid }}"
 
-    - name: Enable Prometheus metrics in synapse config
+    - name: Enable Prometheus metrics in sybra config
       ansible.builtin.blockinfile:
-        path: "{{ data_root }}/synapse/home/config.yaml"
+        path: "{{ data_root }}/sybra/home/config.yaml"
         marker: "# {mark} ANSIBLE MANAGED BLOCK - metrics"
         block: |
           metrics:
               enabled: true
         create: false
-      notify: Restart synapse
+      notify: Restart sybra
 
-    - name: Deploy synapse stack
+    - name: Deploy sybra stack
       community.docker.docker_compose_v2:
-        project_src: /opt/synapse
+        project_src: /opt/sybra
         state: present
         pull: always
 
@@ -156,7 +162,7 @@
 
     - name: Verify container is running
       ansible.builtin.shell:
-        cmd: docker ps --filter name=^synapse$ --filter status=running --format '{% raw %}{{.Names}}{% endraw %}'
+        cmd: docker ps --filter name=^sybra$ --filter status=running --format '{% raw %}{{.Names}}{% endraw %}'
       register: container_status
       changed_when: false
       failed_when: container_status.stdout_lines | length == 0

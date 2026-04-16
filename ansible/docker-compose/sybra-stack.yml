@@ -1,18 +1,18 @@
 ---
 services:
-  synapse:
-    container_name: synapse
-    image: ghcr.io/automaat/synapse:0.22.0
+  sybra:
+    container_name: sybra
+    image: ghcr.io/automaat/sybra:0.23.0
     restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
-      - /data/synapse/home:/home/synapse/.synapse
-      - /data/synapse/claude:/home/synapse/.claude
-      - /data/synapse/codex:/home/synapse/.codex
+      - /data/sybra/home:/home/sybra/.sybra
+      - /data/sybra/claude:/home/sybra/.claude
+      - /data/sybra/codex:/home/sybra/.codex
     environment:
-      SYNAPSE_PORT: "8080"
-      SYNAPSE_STATIC_DIR: /app/web
+      SYBRA_PORT: "8080"
+      SYBRA_STATIC_DIR: /app/web
       GH_TOKEN: ${GH_TOKEN}
     env_file:
       - .env
