@@ -105,6 +105,13 @@ http:
       tls:
         certResolver: cloudflare
 
+    adguard-doh:
+      rule: "Host(`dns.mskalski.dev`) && Path(`/dns-query`)"
+      service: adguard-doh
+      entryPoints: [websecure]
+      tls:
+        certResolver: cloudflare
+
   services:
     jellyfin:
       loadBalancer:
@@ -170,6 +177,16 @@ http:
       loadBalancer:
         servers:
           - url: "http://192.168.20.218:8000"
+
+    adguard-doh:
+      loadBalancer:
+        serversTransport: adguard-insecure
+        servers:
+          - url: "https://192.168.10.222:3443"
+
+  serversTransports:
+    adguard-insecure:
+      insecureSkipVerify: true
 
   middlewares:
     internal-whitelist:
