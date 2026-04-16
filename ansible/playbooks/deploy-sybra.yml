@@ -148,6 +148,25 @@
         create: false
       notify: Restart sybra
 
+    # The server container has 14GB RAM and 6 cores (see ansible/playbooks/
+    # setup-sybra-lxc.yml). The default max_concurrent=3 was sized for a
+    # laptop and caused "max concurrent agents reached (3)" errors during
+    # batch workflow runs on 2026-04-16. max_turns=100 brings the guardrail
+    # down from the default 150 after agent 70affeff burned 150 turns on a
+    # test task. log_retention_days=7 matches the rotation cadence of the
+    # rotating slog writer.
+    - name: Tune agent defaults in sybra config
+      ansible.builtin.blockinfile:
+        path: "{{ data_root }}/sybra/home/config.yaml"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - agent"
+        block: |
+          agent:
+              max_concurrent: 10
+              max_turns: 100
+              log_retention_days: 7
+        create: false
+      notify: Restart sybra
+
     - name: Deploy sybra stack
       community.docker.docker_compose_v2:
         project_src: /opt/sybra

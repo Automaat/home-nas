@@ -14,6 +14,13 @@ services:
       SYBRA_PORT: "8080"
       SYBRA_STATIC_DIR: /app/web
       GH_TOKEN: ${GH_TOKEN}
+      # LXC kernels ship with kernel.unprivileged_userns_clone=0, which makes
+      # bwrap — the process isolator codex uses for --full-auto — crash
+      # before the agent can execute its first tool. The container is
+      # already the sandbox, so swap --full-auto for
+      # --sandbox danger-full-access. This flag is honored by
+      # codexSandboxArgs in internal/agent/manager.go.
+      SYBRA_DISABLE_CODEX_SANDBOX: "1"
     env_file:
       - .env
     security_opt:
