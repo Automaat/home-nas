@@ -47,6 +47,8 @@
         answer: "{{ traefik_lan_ip }}"
       - domain: finance-api.mskalski.dev
         answer: "{{ traefik_lan_ip }}"
+      - domain: dns.mskalski.dev
+        answer: "{{ traefik_lan_ip }}"
 
   handlers:
     - name: Restart systemd-resolved
@@ -76,6 +78,34 @@
         - /opt/adguard
         - "{{ adguard_config_dir }}"
         - "{{ adguard_work_dir }}"
+
+    - name: Check for existing DoH self-signed cert
+      ansible.builtin.stat:
+        path: "{{ adguard_config_dir }}/doh-cert.pem"
+      register: doh_cert_stat
+
+    - name: Generate self-signed DoH cert (Traefik validates with insecureSkipVerify)
+      ansible.builtin.command: >
+        openssl req -x509 -newkey rsa:2048 -nodes
+        -keyout {{ adguard_config_dir }}/doh-key.pem
+        -out {{ adguard_config_dir }}/doh-cert.pem
+        -days 3650
+        -subj "/CN=dns.mskalski.dev"
+        -addext "subjectAltName=DNS:dns.mskalski.dev"
+      when: not doh_cert_stat.stat.exists
+      changed_when: true
+      notify: Restart AdGuard Home
+
+    - name: Fix DoH cert permissions
+      ansible.builtin.file:
+        path: "{{ item }}"
+        mode: '0644'
+        owner: root
+        group: root
+      loop:
+        - "{{ adguard_config_dir }}/doh-cert.pem"
+        - "{{ adguard_config_dir }}/doh-key.pem"
+      when: not doh_cert_stat.stat.exists
 
     - name: Ensure systemd-resolved drop-in directory exists
       ansible.builtin.file:

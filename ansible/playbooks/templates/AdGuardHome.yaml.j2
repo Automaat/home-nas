@@ -48,6 +48,8 @@ dns:
   trusted_proxies:
     - 127.0.0.0/8
     - ::1/128
+    - 172.16.0.0/12
+    - 192.168.10.0/24
   cache_size: 4194304
   cache_ttl_min: 0
   cache_ttl_max: 0
@@ -77,19 +79,19 @@ dns:
   serve_plain_dns: true
   hostsfile_enabled: true
 tls:
-  enabled: false
-  server_name: ""
+  enabled: true
+  server_name: "dns.mskalski.dev"
   force_https: false
-  port_https: 443
+  port_https: 3443
   port_dns_over_tls: 853
   port_dns_over_quic: 853
   port_dnscrypt: 0
   dnscrypt_config_file: ""
-  allow_unencrypted_doh: false
+  allow_unencrypted_doh: true
   certificate_chain: ""
   private_key: ""
-  certificate_path: ""
-  private_key_path: ""
+  certificate_path: /opt/adguardhome/conf/doh-cert.pem
+  private_key_path: /opt/adguardhome/conf/doh-key.pem
   strict_sni_check: false
 querylog:
   dir_path: ""
