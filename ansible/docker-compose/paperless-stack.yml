@@ -30,7 +30,7 @@ services:
 
   paperless-redis-exporter:
     container_name: paperless-redis-exporter
-    image: oliver006/redis_exporter:v1.82.0
+    image: oliver006/redis_exporter:v1.83.0
     restart: unless-stopped
     environment:
       REDIS_ADDR: "redis://paperless-redis:6379"
