@@ -129,7 +129,7 @@ services:
     restart: unless-stopped
 
   lingarr:
-    image: ghcr.io/lingarr-translate/lingarr:1.0.9
+    image: ghcr.io/lingarr-translate/lingarr:1.1.0
     container_name: lingarr
     environment:
       - PUID=1000
