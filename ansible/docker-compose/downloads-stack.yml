@@ -30,7 +30,7 @@ services:
   #     start_period: 10s
 
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:5.1.4-libtorrentv1
+    image: lscr.io/linuxserver/qbittorrent:5.2.0-libtorrentv1
     container_name: qbittorrent
     network_mode: host
     environment:
